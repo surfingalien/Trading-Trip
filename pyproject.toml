@@ -1,9 +1,18 @@
 [project]
 name = "tradingview-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Advanced multi-agent AI trading framework and real-time market analysis MCP server"
 readme = "README.md"
 requires-python = ">=3.10"
+authors = [
+  { name = "Atila Ahmettaner" }
+]
+urls = { Repository = "https://github.com/atilaahmettaner/tradingview-mcp" }
+keywords = ["mcp", "tradingview", "crypto", "technical analysis", "screener", "agents"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
   "mcp[cli]>=1.12.0",
   "tradingview-screener>=0.6.4",

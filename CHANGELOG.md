@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-24
+
+### Added
+- **Docker Support**: Official Dockerfile and docker-compose.yml for easy 1-click self-hosting.
+- **PyPI Release**: Added proper metadata and structuring for PyPI distribution (`pip install tradingview-mcp`).
+
 ## [0.2.0] - 2026-03-24
 
 ### Added

@@ -40,27 +40,58 @@ https://github-production-user-asset-6210df.s3.amazonaws.com/67838093/478689497-
 
 ## 🚀 Quick Start (5-Minute Setup)
 
-### Option 1: Claude Desktop (Recommended)
+### Option 1: Docker (Fastest)
+
+Run the framework immediately on port 8080:
+```bash
+docker run -p 8080:8000 atilaahmettaner/tradingview-mcp:latest
+```
+
+**Claude Desktop Configuration:**
+```json
+{
+  "mcpServers": {
+    "tradingview-mcp": {
+      "command": "curl",
+      "args": ["-s", "http://localhost:8080/sse"]
+    }
+  }
+}
+```
+*(For Cursor/Windsurf, just use the SSE URL: `http://localhost:8080/sse`)*
+
+### Option 2: Python / PyPI
+
+Install the package directly:
+```bash
+uv tool install tradingview-mcp
+# or standard pip:
+pip install tradingview-mcp
+```
+
+**Claude Desktop Configuration:**
+```json
+{
+  "mcpServers": {
+    "tradingview-mcp": {
+      "command": "tradingview-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Option 3: Direct Git Execution (No Installation)
 
 1. **Install UV Package Manager:**
    ```bash
-   # macOS (Homebrew)
-   brew install uv
-   
-   # Windows
-   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-   
-   # macOS/Linux (Direct)
-   curl -LsSf https://astral.sh/uv/install.sh | sh
+   brew install uv  # macOS
+   curl -LsSf https://astral.sh/uv/install.sh | sh  # Linux
    ```
 
-2. **Add to Claude Desktop Configuration:**
-   
-   **Config Path:**
-   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-   
+2. **Claude Desktop Configuration:**
    ```json
+
    {
      "mcpServers": {
        "tradingview-mcp": {

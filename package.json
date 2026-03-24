@@ -1,6 +1,6 @@
 {
   "name": "@atilaahmettaner/tradingview-mcp",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "description": "AI Trading Intelligence Framework - Advanced multi-agent analysis and real-time market screening",
   "type": "module",
   "main": "dist/index.js",
