@@ -233,11 +233,17 @@ RELEASE_NOTES_*.md
 # Scratch / temp files
 Untitled-*
 
-# npm config (this is a Python project)
+# Frontend build artifacts — never commit
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.production.local
+
+# npm root-level (Python project)
 package.json
 package-lock.json
 node_modules/
 
-# Build artifacts that shouldn't be committed
+# Build artifacts
 dist/
 *.egg-info/
