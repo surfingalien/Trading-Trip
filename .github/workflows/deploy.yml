@@ -44,7 +44,11 @@ jobs:
   redeploy-render:
     name: Redeploy → Render
     runs-on: ubuntu-latest
-    if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
     steps:
       - name: Trigger Render deploy
-        run: curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}"
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            curl -s "$RENDER_DEPLOY_HOOK"
+          fi
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
