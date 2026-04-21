@@ -8,12 +8,17 @@ import {
   TrendingUp, TrendingDown, DollarSign, RefreshCw,
   BarChart2, Lightbulb, Activity, Globe, AlertTriangle,
   Bell, BellOff, Zap, Target, Shield, Cpu, Brain,
+  Bitcoin, Search, Layers, X, Coins,
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { PORTFOLIO, RECOMMENDATIONS, NEW_STOCK_IDEAS } from '@/lib/portfolioData';
+import {
+  PORTFOLIO, RECOMMENDATIONS, NEW_STOCK_IDEAS,
+  CRYPTO_WATCHLIST, CRYPTO_RECOMMENDATIONS,
+  ETF_WATCHLIST, ETF_RECOMMENDATIONS,
+} from '@/lib/portfolioData';
 import { usePortfolio } from '@/lib/usePortfolio';
 import { calcRiskMetrics, runMonteCarlo, getMeta } from '@/lib/analytics';
 import { API_BASE } from '@/lib/api';
@@ -48,7 +53,7 @@ function Delta({ v, suffix = '' }: { v: number; suffix?: string }) {
   );
 }
 
-type Tab = 'overview' | 'analysis' | 'montecarlo' | 'signals' | 'market' | 'recommendations' | 'alerts';
+type Tab = 'overview' | 'analysis' | 'montecarlo' | 'signals' | 'market' | 'recommendations' | 'alerts' | 'crypto' | 'etfs';
 
 // ─── Main Component ────────────────────────────────────────────────────────
 export default function TradingDashboard() {
@@ -67,6 +72,10 @@ export default function TradingDashboard() {
   const [newAlertThreshold, setNewAlertThreshold] = useState('');
   const [newAlertType, setNewAlertType] = useState<'above' | 'below' | 'change_pct'>('above');
   const [monteCarlo, setMonteCarlo] = useState<ReturnType<typeof runMonteCarlo> | null>(null);
+  const [cryptoPrices, setCryptoPrices] = useState<Record<string, { price: number; change_pct: number }>>({});
+  const [etfPrices, setEtfPrices]     = useState<Record<string, { price: number; change_pct: number }>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen]   = useState(false);
 
   // ── Risk metrics ─────────────────────────────────────────────────────────
   const risk = useMemo(() => {
@@ -105,6 +114,35 @@ export default function TradingDashboard() {
     if (tab === 'montecarlo' && !monteCarlo) computeMonteCarlo();
   }, [tab, monteCarlo, computeMonteCarlo]);
 
+  // ── Crypto / ETF live prices ──────────────────────────────────────────────
+  useEffect(() => {
+    const fetchPrices = async (symbols: string[], setter: (m: Record<string, { price: number; change_pct: number }>) => void) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`);
+        if (!res.ok) return;
+        const data: Array<{ symbol: string; price: number; change_pct: number; error?: string }> = await res.json();
+        const map: Record<string, { price: number; change_pct: number }> = {};
+        data.forEach(d => { if (!d.error) map[d.symbol] = d; });
+        setter(map);
+      } catch { /* silent */ }
+    };
+    if (tab === 'crypto') fetchPrices(CRYPTO_WATCHLIST.map(c => c.symbol), setCryptoPrices);
+    if (tab === 'etfs')   fetchPrices(ETF_WATCHLIST.map(e => e.symbol),   setEtfPrices);
+  }, [tab]);
+
+  // ── Search across all assets ──────────────────────────────────────────────
+  const allAssets = useMemo(() => [
+    ...PORTFOLIO.positions.map(p => ({ symbol: p.symbol, name: p.description, type: 'Stock' as const,  tab: 'overview' as Tab })),
+    ...CRYPTO_WATCHLIST.map(c =>    ({ symbol: c.symbol, name: c.name,        type: 'Crypto' as const, tab: 'crypto'   as Tab })),
+    ...ETF_WATCHLIST.map(e =>       ({ symbol: e.symbol, name: e.name,        type: 'ETF' as const,    tab: 'etfs'     as Tab })),
+  ], []);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return allAssets.filter(a => a.symbol.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [searchQuery, allAssets]);
+
   // ── MC chart data ──────────────────────────────────────────────────────────
   const mcChartData = useMemo(() => {
     if (!monteCarlo) return [];
@@ -132,11 +170,13 @@ export default function TradingDashboard() {
   const sortedEnriched = [...enriched].sort((a, b) => b.liveValue - a.liveValue);
 
   const TABS: { id: Tab; label: string; icon: typeof DollarSign }[] = [
-    { id: 'overview',        label: 'Portfolio',      icon: DollarSign },
+    { id: 'overview',        label: 'Portfolio',       icon: DollarSign },
     { id: 'analysis',        label: 'Risk & Analysis', icon: Shield },
     { id: 'signals',         label: 'Backtest',        icon: Activity },
     { id: 'montecarlo',      label: '6-Month Outlook', icon: Target },
     { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+    { id: 'crypto',          label: 'Crypto',          icon: Bitcoin },
+    { id: 'etfs',            label: 'ETFs',            icon: Layers },
     { id: 'market',          label: 'Markets',         icon: Globe },
     { id: 'alerts',          label: `Alerts${alerts.length ? ` (${alerts.length})` : ''}`, icon: Bell },
   ];
@@ -176,6 +216,43 @@ export default function TradingDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Search */}
+            <div className="relative hidden sm:block">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search stocks, crypto, ETFs…"
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+                className="bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-7 py-1.5 text-sm text-gray-100 placeholder-gray-500 w-52 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="h-3 w-3 text-gray-500 hover:text-gray-300" />
+                </button>
+              )}
+              {searchOpen && searchResults.length > 0 && (
+                <div className="absolute top-full mt-1 right-0 w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                  {searchResults.map(r => (
+                    <button key={r.symbol + r.type} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-800 text-left transition-colors"
+                      onMouseDown={() => { setTab(r.tab); setSearchQuery(''); setSearchOpen(false); }}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${r.type === 'Crypto' ? 'bg-orange-900' : r.type === 'ETF' ? 'bg-violet-900' : 'bg-blue-900'}`}>
+                        {r.type === 'Crypto' ? <Bitcoin className="h-3.5 w-3.5 text-orange-300" /> : r.type === 'ETF' ? <Layers className="h-3.5 w-3.5 text-violet-300" /> : <BarChart2 className="h-3.5 w-3.5 text-blue-300" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-white text-sm">{r.symbol.replace('-USD', '')}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${r.type === 'Crypto' ? 'bg-orange-900/60 text-orange-300' : r.type === 'ETF' ? 'bg-violet-900/60 text-violet-300' : 'bg-blue-900/60 text-blue-300'}`}>{r.type}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">{r.name}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {triggeredAlerts.length > 0 && (
               <Badge className="bg-red-700 text-white animate-pulse flex items-center gap-1">
                 <Bell className="h-3 w-3" /> {triggeredAlerts.length} alert{triggeredAlerts.length > 1 ? 's' : ''}
@@ -755,6 +832,237 @@ export default function TradingDashboard() {
             </Card>
           </div>
         )}
+
+        {/* ────────────────────────────────────────────────────────────────
+            TAB: CRYPTO
+        ─────────────────────────────────────────────────────────────────── */}
+        {tab === 'crypto' && (
+          <div className="space-y-4">
+            {/* Top 5 Recommendations */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-orange-400 text-base flex items-center gap-2">
+                  <Bitcoin className="h-4 w-4" /> Top 5 Cryptos for Long-Term Investment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {CRYPTO_RECOMMENDATIONS.map((rec, i) => {
+                    const live = cryptoPrices[rec.symbol];
+                    return (
+                      <div key={rec.symbol} className="bg-gray-800 border border-orange-900/40 rounded-xl p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-full bg-orange-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                            <div>
+                              <div className="font-bold text-white">{rec.name}</div>
+                              <div className="text-xs text-gray-500">{rec.symbol.replace('-USD', '')}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {live ? (
+                              <>
+                                <div className="text-white font-bold text-sm">
+                                  {live.price >= 1000 ? fmt$(live.price, 0) : live.price >= 1 ? fmt$(live.price, 2) : `$${live.price.toFixed(4)}`}
+                                </div>
+                                <Delta v={live.change_pct} />
+                              </>
+                            ) : <div className="text-gray-600 text-xs animate-pulse">Loading…</div>}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="text-xs px-2 py-0.5 rounded border font-semibold border-emerald-500 text-emerald-300 bg-emerald-900/30">{rec.action}</span>
+                          <span className="text-xs text-gray-500">{rec.horizon}</span>
+                          <span className={`text-xs font-medium ${rec.risk === 'Medium' ? 'text-yellow-400' : rec.risk === 'High' ? 'text-red-400' : 'text-green-400'}`}>{rec.risk} risk</span>
+                          <span className="text-xs text-orange-400 ml-auto font-medium">{rec.targetAlloc}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed">{rec.thesis}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Full watchlist table */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-gray-100 text-base flex items-center gap-2">
+                  <Coins className="h-4 w-4 text-orange-400" /> Crypto Watchlist — Live Prices
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                      {['Asset', 'Tags', 'Price', '24h Change', 'Rating'].map(h => (
+                        <th key={h} className={`py-2 px-3 ${h === 'Asset' || h === 'Tags' ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CRYPTO_WATCHLIST.map(c => {
+                      const live = cryptoPrices[c.symbol];
+                      const isTop5 = CRYPTO_RECOMMENDATIONS.some(r => r.symbol === c.symbol);
+                      return (
+                        <tr key={c.symbol} className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${isTop5 ? 'bg-orange-950/10' : ''}`}>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              {isTop5
+                                ? <Bitcoin className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
+                                : <div className="w-3.5 h-3.5 flex-shrink-0" />
+                              }
+                              <div>
+                                <div className="font-semibold text-white">{c.name}</div>
+                                <div className="text-xs text-gray-500">{c.symbol.replace('-USD', '')}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-wrap gap-1">
+                              {c.tags.map(tag => <span key={tag} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{tag}</span>)}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-white font-medium">
+                            {live
+                              ? live.price >= 1000 ? fmt$(live.price, 0)
+                                : live.price >= 1 ? fmt$(live.price, 2)
+                                : `$${live.price.toFixed(4)}`
+                              : <span className="text-gray-600">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {live ? <Delta v={live.change_pct} /> : <span className="text-gray-600">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${ratingBadge(c.rating)}`}>
+                              {c.rating.replace('_', ' ')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ────────────────────────────────────────────────────────────────
+            TAB: ETFs
+        ─────────────────────────────────────────────────────────────────── */}
+        {tab === 'etfs' && (
+          <div className="space-y-4">
+            {/* Top 5 Recommendations */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-violet-400 text-base flex items-center gap-2">
+                  <Layers className="h-4 w-4" /> Top 5 ETFs for Long-Term Investment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {ETF_RECOMMENDATIONS.map((rec, i) => {
+                    const live = etfPrices[rec.symbol];
+                    return (
+                      <div key={rec.symbol} className="bg-gray-800 border border-violet-900/40 rounded-xl p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-full bg-violet-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                            <div>
+                              <div className="font-bold text-white">{rec.symbol}</div>
+                              <div className="text-xs text-gray-500 max-w-[140px] truncate">{rec.name}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {live ? (
+                              <>
+                                <div className="text-white font-bold text-sm">{fmt$(live.price, 2)}</div>
+                                <Delta v={live.change_pct} />
+                              </>
+                            ) : <div className="text-gray-600 text-xs animate-pulse">Loading…</div>}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="text-xs px-2 py-0.5 rounded border font-semibold border-emerald-500 text-emerald-300 bg-emerald-900/30">{rec.action}</span>
+                          <span className="text-xs text-gray-500">{rec.horizon}</span>
+                          <span className={`text-xs font-medium ${rec.risk === 'Low' ? 'text-green-400' : rec.risk.includes('Medium') ? 'text-yellow-400' : 'text-red-400'}`}>{rec.risk}</span>
+                        </div>
+                        <div className="flex items-center justify-between mb-2 text-xs">
+                          <span className="text-gray-500">Expense: <span className="text-gray-300 font-medium">{rec.expenseRatio}</span></span>
+                          <span className="text-violet-400 font-medium">{rec.targetAlloc}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed">{rec.thesis}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Full watchlist table */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-gray-100 text-base flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-violet-400" /> ETF Watchlist — Live Prices
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                      {['Fund', 'Sector', 'Tags', 'Price', '24h', 'Expense', 'Rating'].map(h => (
+                        <th key={h} className={`py-2 px-3 ${['Fund', 'Sector', 'Tags'].includes(h) ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ETF_WATCHLIST.map(etf => {
+                      const live = etfPrices[etf.symbol];
+                      const isTop5 = ETF_RECOMMENDATIONS.some(r => r.symbol === etf.symbol);
+                      const rec = ETF_RECOMMENDATIONS.find(r => r.symbol === etf.symbol);
+                      return (
+                        <tr key={etf.symbol} className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${isTop5 ? 'bg-violet-950/10' : ''}`}>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              {isTop5
+                                ? <Layers className="h-3.5 w-3.5 text-violet-400 flex-shrink-0" />
+                                : <div className="w-3.5 h-3.5 flex-shrink-0" />
+                              }
+                              <div>
+                                <div className="font-semibold text-white">{etf.symbol}</div>
+                                <div className="text-xs text-gray-500 max-w-[130px] truncate">{etf.name}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-400 text-xs">{etf.sector}</td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-wrap gap-1">
+                              {etf.tags.map(tag => <span key={tag} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{tag}</span>)}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-white font-medium">
+                            {live ? fmt$(live.price, 2) : <span className="text-gray-600">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {live ? <Delta v={live.change_pct} /> : <span className="text-gray-600">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-gray-400 text-xs">{rec?.expenseRatio ?? '—'}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${ratingBadge(etf.rating)}`}>
+                              {etf.rating.replace('_', ' ')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
       </div>
 
       <footer className="border-t border-gray-800 px-6 py-3 text-center text-xs text-gray-700 mt-8">

@@ -95,3 +95,88 @@ export const NEW_STOCK_IDEAS: Array<{
   { symbol: 'SNOW',  name: 'Snowflake',             thesis: 'AI data platform — Cortex AI revenue growing. Customer count expanding. Recovering from selloff.',   targetAlloc: '2%',    risk: 'High' },
   { symbol: 'CRWD',  name: 'CrowdStrike',           thesis: 'AI-native cybersecurity leader. Falcon platform consolidating security spend. High NRR.',            targetAlloc: '2%',    risk: 'Medium' },
 ];
+
+// ── Crypto & ETF Watchlists ────────────────────────────────────────────────
+
+export interface WatchlistItem {
+  symbol: string;
+  name: string;
+  description: string;
+  sector: string;
+  rating: 'STRONG_BUY' | 'BUY' | 'HOLD' | 'SELL' | 'STRONG_SELL';
+  tags: string[];
+}
+
+export const CRYPTO_WATCHLIST: WatchlistItem[] = [
+  { symbol: 'BTC-USD',  name: 'Bitcoin',   description: 'Digital gold, institutional store of value',    sector: 'Crypto', rating: 'STRONG_BUY', tags: ['L1', 'Store of Value'] },
+  { symbol: 'ETH-USD',  name: 'Ethereum',  description: 'Smart contract platform, DeFi backbone',         sector: 'Crypto', rating: 'STRONG_BUY', tags: ['L1', 'DeFi'] },
+  { symbol: 'SOL-USD',  name: 'Solana',    description: 'High-throughput L1, fastest growing DeFi',       sector: 'Crypto', rating: 'BUY',         tags: ['L1', 'DeFi'] },
+  { symbol: 'XRP-USD',  name: 'XRP',       description: 'Cross-border payments, 75+ central banks',       sector: 'Crypto', rating: 'BUY',         tags: ['Payments', 'Regulated'] },
+  { symbol: 'BNB-USD',  name: 'BNB',       description: 'Binance ecosystem token, BNB Chain L1',          sector: 'Crypto', rating: 'HOLD',        tags: ['Exchange', 'L1'] },
+  { symbol: 'AVAX-USD', name: 'Avalanche', description: 'Institutional subnets, BlackRock tokenization',  sector: 'Crypto', rating: 'BUY',         tags: ['L1', 'Enterprise'] },
+  { symbol: 'DOGE-USD', name: 'Dogecoin',  description: 'Meme coin with payment utility',                 sector: 'Crypto', rating: 'HOLD',        tags: ['Meme', 'Payments'] },
+  { symbol: 'ADA-USD',  name: 'Cardano',   description: 'Peer-reviewed PoS blockchain',                   sector: 'Crypto', rating: 'HOLD',        tags: ['L1', 'PoS'] },
+  { symbol: 'LINK-USD', name: 'Chainlink', description: 'Decentralized oracle network, DeFi infra',       sector: 'Crypto', rating: 'BUY',         tags: ['Oracle', 'DeFi'] },
+  { symbol: 'DOT-USD',  name: 'Polkadot',  description: 'Cross-chain interoperability, parachain L0',     sector: 'Crypto', rating: 'HOLD',        tags: ['L0', 'Interop'] },
+];
+
+export const CRYPTO_RECOMMENDATIONS: Array<{
+  symbol: string; name: string; action: string; horizon: string; risk: string; thesis: string; targetAlloc: string;
+}> = [
+  {
+    symbol: 'BTC-USD', name: 'Bitcoin', action: 'BUY', horizon: '2–4 years', risk: 'Medium', targetAlloc: '5–10%',
+    thesis: 'BlackRock & Fidelity ETFs pulling institutional capital. Post-halving supply shock (Apr 2024) + growing demand historically drives 18-month bull cycles. Digital gold with $1T+ market cap floor and sovereign adoption accelerating.',
+  },
+  {
+    symbol: 'ETH-USD', name: 'Ethereum', action: 'BUY', horizon: '2–3 years', risk: 'Medium', targetAlloc: '3–5%',
+    thesis: 'Foundation of tokenized finance — RWAs, DeFi, and stablecoins all run on Ethereum. ETF approval + 3.5% staking yield makes ETH a productive asset. EIP-4844 cut L2 fees 90%, driving mass adoption.',
+  },
+  {
+    symbol: 'SOL-USD', name: 'Solana', action: 'BUY', horizon: '1–2 years', risk: 'High', targetAlloc: '2–3%',
+    thesis: 'Fastest growing DeFi and consumer crypto ecosystem. Sub-cent transactions enable apps impossible on Ethereum. Developer activity and DEX volumes at all-time highs. Solana ETF expected 2026.',
+  },
+  {
+    symbol: 'XRP-USD', name: 'XRP', action: 'BUY', horizon: '1–2 years', risk: 'Medium', targetAlloc: '2%',
+    thesis: 'SEC lawsuit fully resolved. 75+ central banks piloting XRP for CBDC corridors. RLUSD stablecoin launched Q1 2026. XRP ETF approval imminent — Grayscale & Bitwise filed. Regulatory clarity is the catalyst.',
+  },
+  {
+    symbol: 'AVAX-USD', name: 'Avalanche', action: 'BUY', horizon: '1–2 years', risk: 'High', targetAlloc: '1–2%',
+    thesis: 'Institutional blockchain of choice — BlackRock tokenized funds and JP Morgan Onyx run on Avalanche subnets. Gaming (Beam) and enterprise chain deployment driving ecosystem growth. Under the radar vs SOL.',
+  },
+];
+
+export const ETF_WATCHLIST: WatchlistItem[] = [
+  { symbol: 'QQQ',  name: 'Invesco QQQ Trust',         description: 'Nasdaq-100 index — top 100 non-financial US stocks',  sector: 'Large Cap Tech', rating: 'STRONG_BUY', tags: ['Index', 'Nasdaq-100'] },
+  { symbol: 'VOO',  name: 'Vanguard S&P 500 ETF',       description: 'S&P 500 index, 0.03% expense ratio',                  sector: 'Broad Market',   rating: 'STRONG_BUY', tags: ['Index', 'S&P 500'] },
+  { symbol: 'VGT',  name: 'Vanguard Information Tech',  description: 'Pure-play technology sector ETF',                     sector: 'Technology',     rating: 'BUY',         tags: ['Sector', 'Tech'] },
+  { symbol: 'SOXX', name: 'iShares Semiconductor ETF',  description: '30 global semiconductor companies',                   sector: 'Semiconductors', rating: 'BUY',         tags: ['Sector', 'Chips'] },
+  { symbol: 'SPY',  name: 'SPDR S&P 500 ETF Trust',     description: 'Largest ETF by AUM, S&P 500 tracker',                 sector: 'Broad Market',   rating: 'STRONG_BUY', tags: ['Index', 'S&P 500'] },
+  { symbol: 'ARKK', name: 'ARK Innovation ETF',          description: 'Disruptive tech — AI, genomics, robotics (active)',   sector: 'Innovation',     rating: 'HOLD',        tags: ['Active', 'Disruptive'] },
+  { symbol: 'IWM',  name: 'iShares Russell 2000 ETF',   description: 'Small-cap US stocks, domestic economy exposure',       sector: 'Small Cap',      rating: 'HOLD',        tags: ['Index', 'Small Cap'] },
+  { symbol: 'GLD',  name: 'SPDR Gold Shares',            description: 'Physical gold-backed ETF, inflation hedge',           sector: 'Commodities',    rating: 'BUY',         tags: ['Commodity', 'Hedge'] },
+];
+
+export const ETF_RECOMMENDATIONS: Array<{
+  symbol: string; name: string; action: string; horizon: string; risk: string; thesis: string; expenseRatio: string; targetAlloc: string;
+}> = [
+  {
+    symbol: 'QQQ', name: 'Invesco QQQ Trust', action: 'BUY', horizon: '3–5 years', risk: 'Medium', expenseRatio: '0.20%', targetAlloc: '10–15%',
+    thesis: 'Heaviest AI weighting of any major index — NVDA, MSFT, AAPL, GOOG, META represent ~45%. Tech earnings growing 20%+ YoY. Historical 17% annual return over 10 years. Core portfolio holding for tech-focused investors.',
+  },
+  {
+    symbol: 'VOO', name: 'Vanguard S&P 500', action: 'BUY', horizon: '5–10 years', risk: 'Low', expenseRatio: '0.03%', targetAlloc: '20–30%',
+    thesis: "Warren Buffett's recommended vehicle for most investors. 500-company diversification, near-zero fees, 10.5% historical CAGR. Beats 90%+ of actively managed funds over 10 years. Core long-term wealth building.",
+  },
+  {
+    symbol: 'VGT', name: 'Vanguard IT ETF', action: 'BUY', horizon: '3–5 years', risk: 'Medium', expenseRatio: '0.10%', targetAlloc: '5–10%',
+    thesis: 'Pure-play on the AI infrastructure build-out. Top holdings mirror your portfolio: AAPL, MSFT, NVDA. Outperforms QQQ in tech bull markets. Near-passive with active sector focus at 0.10% expense ratio.',
+  },
+  {
+    symbol: 'SOXX', name: 'iShares Semiconductor ETF', action: 'BUY', horizon: '2–4 years', risk: 'Medium-High', expenseRatio: '0.35%', targetAlloc: '5%',
+    thesis: 'AI compute super-cycle needs chips. SOXX covers the entire value chain — NVDA, AVGO, TSM, AMD, INTC — stocks you already own — in one diversified vehicle. Ideal for increasing semiconductor exposure with single-stock risk managed.',
+  },
+  {
+    symbol: 'GLD', name: 'SPDR Gold Shares', action: 'BUY', horizon: '1–3 years', risk: 'Low', expenseRatio: '0.40%', targetAlloc: '5%',
+    thesis: 'Gold at all-time highs driven by central bank de-dollarization (China, Russia, India). Portfolio hedge against geopolitical risk and inflation. Negative correlation to equities in downturns — essential for risk management.',
+  },
+];
