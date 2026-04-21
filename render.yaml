@@ -1,0 +1,31 @@
+services:
+  # ── Python REST API ────────────────────────────────────────────────────────
+  - type: web
+    name: trading-trip-api
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      pip install uv &&
+      uv pip install --system fastapi "uvicorn[standard]" tradingview-screener tradingview-ta feedparser yfinance praw &&
+      uv pip install --system -e .
+    startCommand: uvicorn api.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.0"
+    healthCheckPath: /health
+
+  # ── WebSocket price broadcast ──────────────────────────────────────────────
+  - type: web
+    name: trading-trip-ws
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      pip install uv &&
+      uv pip install --system fastapi "uvicorn[standard]" websockets tradingview-screener tradingview-ta feedparser yfinance praw &&
+      uv pip install --system -e .
+    startCommand: uvicorn api.ws_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.0"
