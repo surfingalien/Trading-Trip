@@ -1,0 +1,38 @@
+{
+  "name": "portfolio-analytics-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "NODE_OPTIONS='--no-deprecation' next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "api": "bash ~/TradingAnalysis/api/start.sh",
+    "dev:full": "concurrently \"npm run api\" \"npm run dev\""
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.1.0",
+    "@types/node": "^20.19.37",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "axios": "^1.7.7",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15",
+    "lucide-react": "^0.451.0",
+    "next": "^16.2.1",
+    "postcss": "^8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^2.13.0",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "vercel": "^51.8.0"
+  }
+}
