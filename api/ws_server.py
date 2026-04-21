@@ -7,11 +7,12 @@ import asyncio
 import json
 import sys, os, glob
 
-_candidates = glob.glob(
+# Local dev: find tradingview-mcp-server installed via uv tool
+_uv_candidates = glob.glob(
     os.path.expanduser("~/.local/share/uv/tools/tradingview-mcp-server/lib/python*/site-packages")
 )
-if _candidates:
-    sys.path.insert(0, _candidates[0])
+if _uv_candidates and _uv_candidates[0] not in sys.path:
+    sys.path.insert(0, _uv_candidates[0])
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect

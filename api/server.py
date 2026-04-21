@@ -8,12 +8,12 @@ import sys
 import os
 import glob
 
-# Auto-discover site-packages for tradingview-mcp-server
-_candidates = glob.glob(
+# Local dev: find tradingview-mcp-server installed via uv tool
+_uv_candidates = glob.glob(
     os.path.expanduser("~/.local/share/uv/tools/tradingview-mcp-server/lib/python*/site-packages")
 )
-if _candidates:
-    sys.path.insert(0, _candidates[0])
+if _uv_candidates and _uv_candidates[0] not in sys.path:
+    sys.path.insert(0, _uv_candidates[0])
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
