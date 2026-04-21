@@ -1,0 +1,9 @@
+1:"$Sreact.fragment"
+2:I[18054,["/Trading-Trip/_next/static/chunks/14pm5ft4--fp~.js"],"ClientPageRoot"]
+3:I[99819,["/Trading-Trip/_next/static/chunks/14pm5ft4--fp~.js","/Trading-Trip/_next/static/chunks/0af3vgouq2ze6.js"],"default"]
+6:I[50235,["/Trading-Trip/_next/static/chunks/14pm5ft4--fp~.js"],"OutletBoundary"]
+7:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/Trading-Trip/_next/static/chunks/0af3vgouq2ze6.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"6QjbiUSpt3JKGWEskdCyo"}
+4:{}
+5:"$0:rsc:props:children:0:props:serverProvidedParams:params"
+8:null

@@ -1,0 +1,3 @@
+module.exports=[64433,a=>{a.v({className:"inter_5972bc34-module__OU16Qa__className"})},51470,a=>{"use strict";var b=a.i(8877),c=a.i(64433);let d={className:c.default.className,style:{fontFamily:"'Inter', 'Inter Fallback'",fontStyle:"normal"}};null!=c.default.variable&&(d.variable=c.default.variable),a.s(["default",0,function({children:a}){return(0,b.jsx)("html",{lang:"en",children:(0,b.jsx)("body",{className:d.className,children:a})})},"metadata",0,{title:"Portfolio Analytics Platform",description:"Real-time stock market research and investment guidance platform"}],51470)},66404,a=>{a.n(a.i(51470))}];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__04n6j9y._.js.map

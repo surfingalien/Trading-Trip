@@ -13,9 +13,10 @@ import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { PORTFOLIO, RECOMMENDATIONS, NEW_STOCK_IDEAS, type Position } from '@/lib/portfolioData';
+import { PORTFOLIO, RECOMMENDATIONS, NEW_STOCK_IDEAS } from '@/lib/portfolioData';
 import { usePortfolio } from '@/lib/usePortfolio';
 import { calcRiskMetrics, runMonteCarlo, getMeta } from '@/lib/analytics';
+import { API_BASE } from '@/lib/api';
 
 // ─── Formatting helpers ────────────────────────────────────────────────────
 const fmt$ = (n: number, dec = 2) =>
@@ -87,7 +88,7 @@ export default function TradingDashboard() {
     const res: typeof backtests = {};
     await Promise.all(syms.map(async sym => {
       try {
-        const r = await fetch(`/api/backtest?symbol=${sym}&strategy=rsi&period=1y`);
+        const r = await fetch(`${API_BASE}/api/backtest/${sym}?strategy=rsi&period=1y`);
         if (r.ok) res[sym] = await r.json();
       } catch { /* skip */ }
     }));
@@ -97,7 +98,7 @@ export default function TradingDashboard() {
 
   // ── Snapshot ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/snapshot').then(r => r.ok ? r.json() : null).then(d => d && setSnapshot(d));
+    fetch(`${API_BASE}/api/snapshot`).then(r => r.ok ? r.json() : null).then(d => d && setSnapshot(d));
   }, []);
 
   useEffect(() => {
