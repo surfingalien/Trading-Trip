@@ -18,6 +18,7 @@ import {
   PORTFOLIO, RECOMMENDATIONS, NEW_STOCK_IDEAS,
   CRYPTO_WATCHLIST, CRYPTO_RECOMMENDATIONS,
   ETF_WATCHLIST, ETF_RECOMMENDATIONS,
+  WATCHLIST_ALERTS,
 } from '@/lib/portfolioData';
 import { usePortfolio } from '@/lib/usePortfolio';
 import { calcRiskMetrics, runMonteCarlo, getMeta } from '@/lib/analytics';
@@ -804,6 +805,75 @@ export default function TradingDashboard() {
                     })}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Watchlist buy-zone alerts */}
+            <Card className="bg-gray-900 border-emerald-900/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-emerald-400 text-base flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4" /> Watchlist Buy-Zone Alerts
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {WATCHLIST_ALERTS.map(wa => {
+                  const livePrice = prices[wa.symbol]?.price ?? null;
+                  const pctAbove  = livePrice ? ((livePrice - wa.threshold) / wa.threshold) * 100 : null;
+                  const alreadySet = alerts.some(a => a.symbol === wa.symbol && a.type === 'below' && Math.abs(a.threshold - wa.threshold) < 1);
+                  return (
+                    <div key={wa.symbol} className="bg-gray-800 border border-emerald-900/40 rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-base">{wa.symbol}</span>
+                            <span className="text-xs px-2 py-0.5 rounded font-semibold bg-emerald-900 text-emerald-300">{wa.note}</span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">{wa.name}</div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {livePrice ? (
+                            <>
+                              <div className="text-white font-bold">{fmt$(livePrice)}</div>
+                              <div className="text-xs text-gray-500">
+                                {pctAbove !== null && pctAbove > 0
+                                  ? <span className="text-orange-400">{pctAbove.toFixed(1)}% above target</span>
+                                  : <span className="text-emerald-400 animate-pulse">In buy zone!</span>}
+                              </div>
+                            </>
+                          ) : <div className="text-gray-600 text-xs">No live price</div>}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-xs mb-3">
+                        <div className="bg-gray-900/60 rounded p-2">
+                          <div className="text-gray-500">Entry Zone</div>
+                          <div className="text-emerald-400 font-semibold">{wa.entryZone}</div>
+                        </div>
+                        <div className="bg-gray-900/60 rounded p-2">
+                          <div className="text-gray-500">Alert Trigger</div>
+                          <div className="text-white font-semibold">{fmt$(wa.threshold)}</div>
+                        </div>
+                        <div className="bg-gray-900/60 rounded p-2">
+                          <div className="text-gray-500">Target Alloc</div>
+                          <div className="text-violet-400 font-semibold">{wa.targetAlloc}</div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-400 leading-relaxed mb-3">{wa.thesis}</p>
+
+                      <Button
+                        size="sm"
+                        className={alreadySet ? 'bg-gray-700 text-gray-400 cursor-default w-full' : 'bg-emerald-800 hover:bg-emerald-700 w-full'}
+                        disabled={alreadySet}
+                        onClick={() => {
+                          if (!alreadySet) addAlert({ symbol: wa.symbol, type: wa.alertType, threshold: wa.threshold });
+                        }}>
+                        <Bell className="h-3.5 w-3.5 mr-1.5" />
+                        {alreadySet ? `Alert active — notifies below ${fmt$(wa.threshold)}` : `Set alert: notify when ${wa.symbol} drops below ${fmt$(wa.threshold)}`}
+                      </Button>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
 

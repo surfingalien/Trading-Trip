@@ -96,6 +96,30 @@ export const NEW_STOCK_IDEAS: Array<{
   { symbol: 'CRWD',  name: 'CrowdStrike',           thesis: 'AI-native cybersecurity leader. Falcon platform consolidating security spend. High NRR.',            targetAlloc: '2%',    risk: 'Medium' },
 ];
 
+// ── Watchlist Buy Alerts — dip zones for stocks not yet in portfolio ─────────
+
+export const WATCHLIST_ALERTS: Array<{
+  symbol: string;
+  name: string;
+  alertType: 'below';
+  threshold: number;
+  note: string;
+  thesis: string;
+  entryZone: string;
+  targetAlloc: string;
+}> = [
+  {
+    symbol: 'ARM',
+    name: 'Arm Holdings',
+    alertType: 'below',
+    threshold: 180,
+    note: 'DIP TO BUY ZONE',
+    entryZone: '$178–$180',
+    targetAlloc: '2–3%',
+    thesis: 'Royalty toll-booth on every AI chip. v9 architecture commands 2× royalty rate of v8. AWS Graviton, Apple M-series, NVIDIA Grace all pay ARM. Ideal entry on 13% pullback to prior breakout support.',
+  },
+];
+
 // ── Crypto & ETF Watchlists ────────────────────────────────────────────────
 
 export interface WatchlistItem {
