@@ -1,31 +1,36 @@
-name: Deploy
+name: Deploy Frontend → GitHub Pages
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  # ── Build & Deploy Frontend → GitHub Pages ────────────────────────────────
-  deploy-frontend:
-    name: Deploy Frontend → GitHub Pages
+  build-and-deploy:
+    name: Build & Deploy → GitHub Pages
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Build static export
+      - name: Build
         working-directory: frontend
         run: npm run build
         env:
@@ -33,17 +38,18 @@ jobs:
           NEXT_PUBLIC_WS_URL: wss://trading-trip-ws.onrender.com
           NEXT_PUBLIC_BASE_PATH: /Trading-Trip
 
-      - name: Deploy to gh-pages
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: frontend/out
-          force_orphan: true
+          publish_branch: gh-pages
 
-  # ── Trigger Render redeployment ───────────────────────────────────────────
   redeploy-render:
     name: Redeploy → Render
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Trigger Render deploy
         run: |
