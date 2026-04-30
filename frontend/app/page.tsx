@@ -18,7 +18,7 @@ import {
   PORTFOLIO, RECOMMENDATIONS, NEW_STOCK_IDEAS,
   CRYPTO_WATCHLIST, CRYPTO_RECOMMENDATIONS,
   ETF_WATCHLIST, ETF_RECOMMENDATIONS,
-  WATCHLIST_ALERTS,
+  WATCHLIST_ALERTS, CRYPTO_ALERTS, ETF_ALERTS, BuyAlert
 } from '@/lib/portfolioData';
 import { usePortfolio } from '@/lib/usePortfolio';
 import { calcRiskMetrics, runMonteCarlo, getMeta } from '@/lib/analytics';
@@ -47,7 +47,7 @@ const actionBadge = (a: string) => ({
 
 function Delta({ v, suffix = '' }: { v: number; suffix?: string }) {
   return (
-    <span className={`flex items-center gap-0.5 ${v >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+    <span className={`flex items-center gap-0.5 ${v >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
       {v >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
       {fmtPct(v)}{suffix}
     </span>
@@ -77,6 +77,31 @@ export default function TradingDashboard() {
   const [etfPrices, setEtfPrices]     = useState<Record<string, { price: number; change_pct: number }>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen]   = useState(false);
+
+  // Sort State
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+
+  // Market Pulse — Fear & Greed
+  const [fearGreed, setFearGreed] = useState<{ value: number; label: string } | null>(null);
+  useEffect(() => {
+    fetch('https://api.alternative.me/fng/?limit=1')
+      .then(r => r.json())
+      .then(d => {
+        const v = parseInt(d.data[0].value);
+        setFearGreed({ value: v, label: d.data[0].value_classification });
+      })
+      .catch(() => {});
+  }, []);
+
 
   // ── Risk metrics ─────────────────────────────────────────────────────────
   const risk = useMemo(() => {
@@ -168,7 +193,32 @@ export default function TradingDashboard() {
       .sort((a, b) => b.value - a.value);
   }, [enriched]);
 
-  const sortedEnriched = [...enriched].sort((a, b) => b.liveValue - a.liveValue);
+  const sortedEnriched = useMemo(() => {
+    let sortableItems = [...enriched];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aVal: any = a[sortConfig.key as keyof typeof a];
+        let bVal: any = b[sortConfig.key as keyof typeof b];
+        
+        // Handle mapped column names
+        if (sortConfig.key === 'Value') { aVal = a.liveValue; bVal = b.liveValue; }
+        if (sortConfig.key === 'Today') { aVal = a.livePct; bVal = b.livePct; }
+        if (sortConfig.key === 'Total G/L') { aVal = a.liveGain; bVal = b.liveGain; }
+        if (sortConfig.key === 'Total %') { aVal = a.liveGainPct; bVal = b.liveGainPct; }
+        if (sortConfig.key === 'Avg Cost') { aVal = a.avgCost; bVal = b.avgCost; }
+        if (sortConfig.key === 'Live Price') { aVal = a.livePrice; bVal = b.livePrice; }
+        if (sortConfig.key === 'Qty') { aVal = a.qty; bVal = b.qty; }
+        if (sortConfig.key === 'Symbol') { aVal = a.symbol; bVal = b.symbol; }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      sortableItems.sort((a, b) => b.liveValue - a.liveValue); // Default
+    }
+    return sortableItems;
+  }, [enriched, sortConfig]);
 
   const TABS: { id: Tab; label: string; icon: typeof DollarSign }[] = [
     { id: 'overview',        label: 'Portfolio',       icon: DollarSign },
@@ -183,15 +233,15 @@ export default function TradingDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-gray-100 selection:bg-emerald-500/30">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="border-b border-gray-800 px-6 py-3 sticky top-0 z-30 bg-gray-950/95 backdrop-blur">
+      <header className="border-b border-gray-800 px-6 py-3 sticky top-0 z-30 sticky top-0 z-50 bg-gray-950/70 backdrop-blur-2xl shadow-sm border-b border-transparent [border-image:linear-gradient(to_right,transparent,rgba(52,211,153,0.25),rgba(34,211,238,0.2),transparent)_1]">
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <BarChart2 className="h-6 w-6 text-emerald-400 flex-shrink-0" />
             <div>
-              <h1 className="text-lg font-bold leading-tight">Trading Analysis Dashboard</h1>
+              <h1 className="text-xl font-extrabold leading-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">Trading Analysis Dashboard</h1>
               <p className="text-xs text-gray-500">{PORTFOLIO.positions.length} positions · {PORTFOLIO.asOf}</p>
             </div>
           </div>
@@ -200,17 +250,17 @@ export default function TradingDashboard() {
           <div className="hidden md:flex items-center gap-6 text-sm">
             <div>
               <span className="text-gray-500 mr-1">Portfolio</span>
-              <span className="font-bold text-white">{fmt$(totalWithCash, 0)}</span>
+              <span className="font-extrabold bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">{fmt$(totalWithCash, 0)}</span>
             </div>
             <div>
               <span className="text-gray-500 mr-1">Total G/L</span>
-              <span className={`font-bold ${totals.gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`font-extrabold tabular-nums ${totals.gain >= 0 ? 'bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent' : 'text-red-400 font-semibold tabular-nums'}`}>
                 {fmt$(totals.gain, 0)} ({fmtPct((totals.gain / totals.cost) * 100)})
               </span>
             </div>
             <div>
               <span className="text-gray-500 mr-1">Today</span>
-              <span className={`font-bold ${totals.dayGain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`font-bold ${totals.dayGain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
                 {fmt$(totals.dayGain, 0)}
               </span>
             </div>
@@ -235,7 +285,7 @@ export default function TradingDashboard() {
                 </button>
               )}
               {searchOpen && searchResults.length > 0 && (
-                <div className="absolute top-full mt-1 right-0 w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="absolute top-full mt-1 right-0 w-72 bg-gray-900/90 backdrop-blur-xl border border-gray-700/60 rounded-xl shadow-2xl shadow-black/60 ring-1 ring-white/5 z-50 overflow-hidden">
                   {searchResults.map(r => (
                     <button key={r.symbol + r.type} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-800 text-left transition-colors"
                       onMouseDown={() => { setTab(r.tab); setSearchQuery(''); setSearchOpen(false); }}>
@@ -292,7 +342,7 @@ export default function TradingDashboard() {
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t transition-colors
                 ${tab === t.id
-                  ? 'bg-gray-800 text-white border-b-2 border-emerald-400'
+                  ? 'bg-gray-800 text-emerald-400 border-b-2 border-emerald-400 drop-shadow-[0_1px_6px_rgba(52,211,153,0.55)]'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/40'}`}>
               <t.icon className="h-3.5 w-3.5" />{t.label}
             </button>
@@ -308,11 +358,11 @@ export default function TradingDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: 'Total Value', value: fmt$(totalWithCash, 0), sub: fmt$(totals.gain, 0) + ' total gain', color: 'text-white', icon: DollarSign },
-                { label: 'Today\'s P&L',  value: fmt$(totals.dayGain, 0), sub: fmtPct((totals.dayGain / totals.cost) * 100), color: totals.dayGain >= 0 ? 'text-emerald-400' : 'text-red-400', icon: totals.dayGain >= 0 ? TrendingUp : TrendingDown },
+                { label: 'Today\'s P&L',  value: fmt$(totals.dayGain, 0), sub: fmtPct((totals.dayGain / totals.cost) * 100), color: totals.dayGain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums', icon: totals.dayGain >= 0 ? TrendingUp : TrendingDown },
                 { label: 'Cash Reserve', value: fmt$(PORTFOLIO.cashValue, 0), sub: ((PORTFOLIO.cashValue / totalWithCash) * 100).toFixed(1) + '% of portfolio', color: 'text-sky-400', icon: DollarSign },
-                { label: 'Total Return', value: fmtPct((totals.gain / totals.cost) * 100), sub: `cost basis ${fmt$(totals.cost, 0)}`, color: totals.gain >= 0 ? 'text-emerald-400' : 'text-red-400', icon: BarChart2 },
+                { label: 'Total Return', value: fmtPct((totals.gain / totals.cost) * 100), sub: `cost basis ${fmt$(totals.cost, 0)}`, color: totals.gain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums', icon: BarChart2 },
               ].map(k => (
-                <Card key={k.label} className="bg-gray-900 border-gray-800">
+                <Card key={k.label} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-gray-400">{k.label}</span>
@@ -326,22 +376,29 @@ export default function TradingDashboard() {
             </div>
 
             {/* Positions table */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base">Positions</CardTitle>
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Positions</CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                    <tr className="border-b border-gray-700/40 text-gray-400 text-xs bg-gray-900/60 backdrop-blur-sm sticky top-[4rem] z-10 shadow-sm">
                       {['Symbol','Qty','Avg Cost','Live Price','Value','Today','Total G/L','Total %','Wt%','Rating'].map(h => (
-                        <th key={h} className={`py-2 px-3 ${h === 'Symbol' ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>{h}</th>
+                        <th key={h} 
+                            onClick={() => requestSort(h)}
+                            className={`py-2 px-3 cursor-pointer hover:text-white transition-colors ${h === 'Symbol' ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>
+                            <div className={`flex items-center gap-1 ${h === 'Symbol' ? 'justify-start' : h === 'Rating' ? 'justify-center' : 'justify-end'}`}>
+                              {h}
+                              {sortConfig?.key === h && <span className="text-emerald-400">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                            </div>
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {sortedEnriched.map(pos => (
-                      <tr key={pos.symbol} className="border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors">
+                      <tr key={pos.symbol} className="border-b border-gray-800/40 hover:bg-gray-800/40 transition-all duration-300 group">
                         <td className="py-2.5 px-3">
                           <div className="font-semibold text-white">{pos.symbol}</div>
                           <div className="text-xs text-gray-500 max-w-[120px] truncate">{pos.description}</div>
@@ -354,10 +411,10 @@ export default function TradingDashboard() {
                         </td>
                         <td className="py-2.5 px-3 text-right text-white">{fmt$(pos.liveValue, 0)}</td>
                         <td className="py-2.5 px-3 text-right"><Delta v={pos.livePct} /></td>
-                        <td className={`py-2.5 px-3 text-right font-medium ${pos.liveGain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <td className={`py-2.5 px-3 text-right font-medium ${pos.liveGain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
                           {fmt$(pos.liveGain, 0)}
                         </td>
-                        <td className={`py-2.5 px-3 text-right ${pos.liveGainPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <td className={`py-2.5 px-3 text-right ${pos.liveGainPct >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
                           {fmtPct(pos.liveGainPct)}
                         </td>
                         <td className="py-2.5 px-3 text-right text-gray-400">
@@ -386,17 +443,17 @@ export default function TradingDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: 'Portfolio Beta', value: risk.beta.toFixed(2), sub: risk.beta > 1.2 ? 'High volatility vs market' : 'Near-market volatility', icon: Activity, color: risk.beta > 1.5 ? 'text-orange-400' : 'text-white' },
-                { label: 'Sharpe Ratio',   value: risk.sharpe.toFixed(2), sub: risk.sharpe > 1 ? 'Good risk-adjusted return' : 'Below target (>1)', icon: Target, color: risk.sharpe >= 1 ? 'text-emerald-400' : 'text-yellow-400' },
-                { label: '1-Day VaR 95%', value: `-${risk.var95.toFixed(2)}%`, sub: `~${fmt$(totalWithCash * risk.var95 / 100, 0)} worst day`, icon: Shield, color: 'text-red-400' },
-                { label: 'Annual Alpha',   value: `${risk.alpha >= 0 ? '+' : ''}${risk.alpha.toFixed(1)}%`, sub: 'vs SPY benchmark', icon: TrendingUp, color: risk.alpha >= 0 ? 'text-emerald-400' : 'text-red-400' },
+                { label: 'Sharpe Ratio',   value: risk.sharpe.toFixed(2), sub: risk.sharpe > 1 ? 'Good risk-adjusted return' : 'Below target (>1)', icon: Target, color: risk.sharpe >= 1 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-yellow-400' },
+                { label: '1-Day VaR 95%', value: `-${risk.var95.toFixed(2)}%`, sub: `~${fmt$(totalWithCash * risk.var95 / 100, 0)} worst day`, icon: Shield, color: 'text-red-400 font-semibold tabular-nums' },
+                { label: 'Annual Alpha',   value: `${risk.alpha >= 0 ? '+' : ''}${risk.alpha.toFixed(1)}%`, sub: 'vs SPY benchmark', icon: TrendingUp, color: risk.alpha >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums' },
               ].map(k => (
-                <Card key={k.label} className="bg-gray-900 border-gray-800">
+                <Card key={k.label} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-gray-400">{k.label}</span>
                       <k.icon className={`h-4 w-4 ${k.color}`} />
                     </div>
-                    <div className={`text-2xl font-bold ${k.color}`}>{k.value}</div>
+                    <div className={`text-2xl font-extrabold tabular-nums ${k.color}`}>{k.value}</div>
                     <div className="text-xs text-gray-500 mt-0.5">{k.sub}</div>
                   </CardContent>
                 </Card>
@@ -431,9 +488,9 @@ export default function TradingDashboard() {
             </div>
 
             {/* Sector allocation chart */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base">Sector Allocation</CardTitle>
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Sector Allocation</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={180}>
@@ -449,7 +506,7 @@ export default function TradingDashboard() {
             </Card>
 
             {/* Concentration warnings */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
                 <CardTitle className="text-yellow-400 text-base flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" /> Concentration & Risk Warnings
@@ -495,7 +552,7 @@ export default function TradingDashboard() {
             </div>
 
             {Object.keys(backtests).length === 0 && !loadingBT && (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                 <CardContent className="py-16 text-center text-gray-500">
                   Click &quot;Run All Backtests&quot; to analyse your top holdings via the trading API
                 </CardContent>
@@ -503,7 +560,7 @@ export default function TradingDashboard() {
             )}
 
             {loadingBT && (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                 <CardContent className="py-16 text-center text-gray-400 animate-pulse">
                   Running backtests via trading API…
                 </CardContent>
@@ -512,22 +569,22 @@ export default function TradingDashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {Object.values(backtests).map(bt => (
-                <Card key={bt.total_trades} className="bg-gray-900 border-gray-800">
+                <Card key={bt.total_trades} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                   <CardContent className="pt-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-bold text-white text-lg">{(bt as {symbol?: string}).symbol ?? '—'}</span>
                         <p className="text-xs text-gray-500">RSI · 1Y · Daily</p>
                       </div>
-                      <span className={`text-xl font-bold ${(bt.total_return_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <span className={`text-xl font-bold ${(bt.total_return_pct ?? 0) >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
                         {fmtPct(bt.total_return_pct ?? 0)}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       {[
-                        ['Win Rate',     `${(bt.win_rate_pct ?? 0).toFixed(0)}%`,          (bt.win_rate_pct ?? 0) >= 55 ? 'text-emerald-400' : 'text-yellow-400'],
-                        ['Sharpe',       (bt.sharpe_ratio ?? 0).toFixed(2),                (bt.sharpe_ratio ?? 0) >= 1 ? 'text-emerald-400' : 'text-yellow-400'],
-                        ['Max Drawdown', `${(bt.max_drawdown_pct ?? 0).toFixed(1)}%`,       'text-red-400'],
+                        ['Win Rate',     `${(bt.win_rate_pct ?? 0).toFixed(0)}%`,          (bt.win_rate_pct ?? 0) >= 55 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-yellow-400'],
+                        ['Sharpe',       (bt.sharpe_ratio ?? 0).toFixed(2),                (bt.sharpe_ratio ?? 0) >= 1 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-yellow-400'],
+                        ['Max Drawdown', `${(bt.max_drawdown_pct ?? 0).toFixed(1)}%`,       'text-red-400 font-semibold tabular-nums'],
                         ['Trades',       String(bt.total_trades ?? 0),                     'text-white'],
                       ].map(([label, val, col]) => (
                         <div key={label} className="bg-gray-800 rounded p-2">
@@ -560,11 +617,11 @@ export default function TradingDashboard() {
                 {/* Outcome summary */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {[
-                    { label: 'Bear Case (10th pct)', value: fmt$(monteCarlo.p10, 0), change: fmtPct(((monteCarlo.p10 - totals.value) / totals.value) * 100), color: 'text-red-400' },
+                    { label: 'Bear Case (10th pct)', value: fmt$(monteCarlo.p10, 0), change: fmtPct(((monteCarlo.p10 - totals.value) / totals.value) * 100), color: 'text-red-400 font-semibold tabular-nums' },
                     { label: 'Median Outcome',        value: fmt$(monteCarlo.median, 0), change: fmtPct(((monteCarlo.median - totals.value) / totals.value) * 100), color: 'text-white' },
-                    { label: 'Bull Case (90th pct)', value: fmt$(monteCarlo.p90, 0), change: fmtPct(((monteCarlo.p90 - totals.value) / totals.value) * 100), color: 'text-emerald-400' },
+                    { label: 'Bull Case (90th pct)', value: fmt$(monteCarlo.p90, 0), change: fmtPct(((monteCarlo.p90 - totals.value) / totals.value) * 100), color: 'text-emerald-400 font-semibold tabular-nums' },
                   ].map(c => (
-                    <Card key={c.label} className="bg-gray-900 border-gray-800">
+                    <Card key={c.label} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                       <CardContent className="pt-4">
                         <div className="text-xs text-gray-400 mb-1">{c.label}</div>
                         <div className={`text-2xl font-bold ${c.color}`}>{c.value}</div>
@@ -575,9 +632,9 @@ export default function TradingDashboard() {
                 </div>
 
                 {/* Path chart */}
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-gray-100 text-base">Portfolio Value Distribution (6 Months)</CardTitle>
+                    <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Portfolio Value Distribution (6 Months)</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
@@ -601,7 +658,7 @@ export default function TradingDashboard() {
             )}
 
             {!monteCarlo && (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
                 <CardContent className="py-16 text-center text-gray-500">
                   Running simulation… (auto-starts when tab opens)
                 </CardContent>
@@ -641,9 +698,9 @@ export default function TradingDashboard() {
             </Card>
 
             {/* All holdings recs */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base flex items-center gap-2">
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
                   <Lightbulb className="h-4 w-4 text-yellow-400" /> 6-Month Action Plan — All Holdings
                 </CardTitle>
               </CardHeader>
@@ -658,7 +715,7 @@ export default function TradingDashboard() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-xs text-gray-500">{rec.horizon}</div>
-                          <div className={`text-xs font-medium ${rec.risk === 'Low' ? 'text-green-400' : rec.risk === 'Medium' ? 'text-yellow-400' : 'text-red-400'}`}>{rec.risk} risk</div>
+                          <div className={`text-xs font-medium ${rec.risk === 'Low' ? 'text-green-400' : rec.risk === 'Medium' ? 'text-yellow-400' : 'text-red-400 font-semibold tabular-nums'}`}>{rec.risk} risk</div>
                         </div>
                       </div>
                       <p className="text-xs text-gray-400 leading-relaxed">{rec.thesis}</p>
@@ -669,7 +726,7 @@ export default function TradingDashboard() {
             </Card>
 
             {/* New ideas */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
                 <CardTitle className="text-emerald-400 text-base flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" /> New Positions for 6-Month Horizon
@@ -706,8 +763,8 @@ export default function TradingDashboard() {
                   { title: 'Crypto',     data: snapshot.crypto },
                   { title: 'ETFs',       data: snapshot.etfs },
                 ].map(group => (
-                  <Card key={group.title} className="bg-gray-900 border-gray-800">
-                    <CardHeader className="pb-2"><CardTitle className="text-gray-100 text-base">{group.title}</CardTitle></CardHeader>
+                  <Card key={group.title} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
+                    <CardHeader className="pb-2"><CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">{group.title}</CardTitle></CardHeader>
                     <CardContent className="space-y-2">
                       {group.data.map(item => (
                         <div key={item.symbol} className="flex items-center justify-between py-1 border-b border-gray-800 last:border-0">
@@ -732,9 +789,9 @@ export default function TradingDashboard() {
         {tab === 'alerts' && (
           <div className="space-y-4">
             {/* New alert form */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base flex items-center gap-2">
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
                   <Bell className="h-4 w-4 text-yellow-400" /> Create Price Alert
                 </CardTitle>
               </CardHeader>
@@ -775,9 +832,9 @@ export default function TradingDashboard() {
             </Card>
 
             {/* Active alerts */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base">Active Alerts ({alerts.length})</CardTitle>
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Active Alerts ({alerts.length})</CardTitle>
               </CardHeader>
               <CardContent>
                 {alerts.length === 0 ? (
@@ -816,7 +873,85 @@ export default function TradingDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {WATCHLIST_ALERTS.map(wa => {
+              {/* ── Crypto Buy-Zone Alerts ────────────────────────────────── */}
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/60 backdrop-blur-md p-5 mb-6 ring-1 ring-inset ring-white/5 hover:border-zinc-700/60 transition-all duration-500">
+                <div className="flex items-center gap-2 mb-4">
+                  <Bitcoin className="w-4 h-4 text-orange-400" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wider bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">Crypto Buy-Zone Alerts</h3>
+                </div>
+                <div className="grid gap-3">
+                  {CRYPTO_ALERTS.map(alert => {
+                    const isActive = alerts.some(a => a.symbol === alert.symbol && a.threshold === alert.threshold);
+                    return (
+                      <div key={alert.symbol} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-semibold text-zinc-100 text-sm">{alert.name}</span>
+                            <span className="text-xs text-orange-400 bg-orange-900/30 px-1.5 py-0.5 rounded">{alert.note}</span>
+                          </div>
+                          <div className="flex gap-4 text-xs text-zinc-500">
+                            <span>Entry: <span className="text-zinc-300">{alert.entryZone}</span></span>
+                            <span>Alloc: <span className="text-zinc-300">{alert.targetAlloc}</span></span>
+                          </div>
+                          <p className="text-xs text-zinc-600 mt-1 truncate max-w-md" title={alert.thesis}>{alert.thesis.slice(0, 90)}…</p>
+                        </div>
+                        <button
+                          onClick={() => !isActive && addAlert({ symbol: alert.symbol, type: alert.alertType, threshold: alert.threshold })}
+                          disabled={isActive}
+                          className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                            isActive
+                              ? 'bg-emerald-900/40 text-emerald-400 cursor-default'
+                              : 'bg-orange-600 hover:bg-orange-500 text-white cursor-pointer'
+                          }`}
+                        >
+                          {isActive ? '✓ Alert active' : `Alert < $${alert.threshold.toLocaleString()}`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── ETF Buy-Zone Alerts ───────────────────────────────────── */}
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/60 backdrop-blur-md p-5 mb-6 ring-1 ring-inset ring-white/5 hover:border-zinc-700/60 transition-all duration-500">
+                <div className="flex items-center gap-2 mb-4">
+                  <Layers className="w-4 h-4 text-violet-400" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wider bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">ETF Dip-Buy Alerts</h3>
+                </div>
+                <div className="grid gap-3">
+                  {ETF_ALERTS.map(alert => {
+                    const isActive = alerts.some(a => a.symbol === alert.symbol && a.threshold === alert.threshold);
+                    return (
+                      <div key={alert.symbol} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-semibold text-zinc-100 text-sm">{alert.name} <span className="text-zinc-500 font-normal">({alert.symbol})</span></span>
+                            <span className="text-xs text-violet-400 bg-violet-900/30 px-1.5 py-0.5 rounded">{alert.note}</span>
+                          </div>
+                          <div className="flex gap-4 text-xs text-zinc-500">
+                            <span>Entry: <span className="text-zinc-300">{alert.entryZone}</span></span>
+                            <span>Alloc: <span className="text-zinc-300">{alert.targetAlloc}</span></span>
+                          </div>
+                          <p className="text-xs text-zinc-600 mt-1 truncate max-w-md" title={alert.thesis}>{alert.thesis.slice(0, 90)}…</p>
+                        </div>
+                        <button
+                          onClick={() => !isActive && addAlert({ symbol: alert.symbol, type: alert.alertType, threshold: alert.threshold })}
+                          disabled={isActive}
+                          className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                            isActive
+                              ? 'bg-emerald-900/40 text-emerald-400 cursor-default'
+                              : 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer'
+                          }`}
+                        >
+                          {isActive ? '✓ Alert active' : `Alert < $${alert.threshold.toLocaleString()}`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {WATCHLIST_ALERTS.map(wa => {
                   const livePrice = prices[wa.symbol]?.price ?? null;
                   const pctAbove  = livePrice ? ((livePrice - wa.threshold) / wa.threshold) * 100 : null;
                   const alreadySet = alerts.some(a => a.symbol === wa.symbol && a.type === 'below' && Math.abs(a.threshold - wa.threshold) < 1);
@@ -878,9 +1013,9 @@ export default function TradingDashboard() {
             </Card>
 
             {/* Pre-built stop-loss suggestions */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base">Suggested Stop-Losses (15% trailing)</CardTitle>
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Suggested Stop-Losses (15% trailing)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
@@ -909,7 +1044,7 @@ export default function TradingDashboard() {
         {tab === 'crypto' && (
           <div className="space-y-4">
             {/* Top 5 Recommendations */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
                 <CardTitle className="text-orange-400 text-base flex items-center gap-2">
                   <Bitcoin className="h-4 w-4" /> Top 5 Cryptos for Long-Term Investment
@@ -943,7 +1078,7 @@ export default function TradingDashboard() {
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="text-xs px-2 py-0.5 rounded border font-semibold border-emerald-500 text-emerald-300 bg-emerald-900/30">{rec.action}</span>
                           <span className="text-xs text-gray-500">{rec.horizon}</span>
-                          <span className={`text-xs font-medium ${rec.risk === 'Medium' ? 'text-yellow-400' : rec.risk === 'High' ? 'text-red-400' : 'text-green-400'}`}>{rec.risk} risk</span>
+                          <span className={`text-xs font-medium ${rec.risk === 'Medium' ? 'text-yellow-400' : rec.risk === 'High' ? 'text-red-400 font-semibold tabular-nums' : 'text-green-400'}`}>{rec.risk} risk</span>
                           <span className="text-xs text-orange-400 ml-auto font-medium">{rec.targetAlloc}</span>
                         </div>
                         <p className="text-xs text-gray-400 leading-relaxed">{rec.thesis}</p>
@@ -955,16 +1090,16 @@ export default function TradingDashboard() {
             </Card>
 
             {/* Full watchlist table */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base flex items-center gap-2">
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
                   <Coins className="h-4 w-4 text-orange-400" /> Crypto Watchlist — Live Prices
                 </CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                    <tr className="border-b border-gray-700/40 text-gray-400 text-xs bg-gray-900/60 backdrop-blur-sm sticky top-[4rem] z-10 shadow-sm">
                       {['Asset', 'Tags', 'Price', '24h Change', 'Rating'].map(h => (
                         <th key={h} className={`py-2 px-3 ${h === 'Asset' || h === 'Tags' ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>{h}</th>
                       ))}
@@ -975,7 +1110,7 @@ export default function TradingDashboard() {
                       const live = cryptoPrices[c.symbol];
                       const isTop5 = CRYPTO_RECOMMENDATIONS.some(r => r.symbol === c.symbol);
                       return (
-                        <tr key={c.symbol} className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${isTop5 ? 'bg-orange-950/10' : ''}`}>
+                        <tr key={c.symbol} className={`border-b border-gray-800/40 hover:bg-gray-800/40 transition-all duration-300 group ${isTop5 ? 'bg-orange-950/10' : ''}`}>
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-2">
                               {isTop5
@@ -1024,7 +1159,7 @@ export default function TradingDashboard() {
         {tab === 'etfs' && (
           <div className="space-y-4">
             {/* Top 5 Recommendations */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
                 <CardTitle className="text-violet-400 text-base flex items-center gap-2">
                   <Layers className="h-4 w-4" /> Top 5 ETFs for Long-Term Investment
@@ -1056,7 +1191,7 @@ export default function TradingDashboard() {
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="text-xs px-2 py-0.5 rounded border font-semibold border-emerald-500 text-emerald-300 bg-emerald-900/30">{rec.action}</span>
                           <span className="text-xs text-gray-500">{rec.horizon}</span>
-                          <span className={`text-xs font-medium ${rec.risk === 'Low' ? 'text-green-400' : rec.risk.includes('Medium') ? 'text-yellow-400' : 'text-red-400'}`}>{rec.risk}</span>
+                          <span className={`text-xs font-medium ${rec.risk === 'Low' ? 'text-green-400' : rec.risk.includes('Medium') ? 'text-yellow-400' : 'text-red-400 font-semibold tabular-nums'}`}>{rec.risk}</span>
                         </div>
                         <div className="flex items-center justify-between mb-2 text-xs">
                           <span className="text-gray-500">Expense: <span className="text-gray-300 font-medium">{rec.expenseRatio}</span></span>
@@ -1071,16 +1206,16 @@ export default function TradingDashboard() {
             </Card>
 
             {/* Full watchlist table */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-gray-100 text-base flex items-center gap-2">
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
                   <Layers className="h-4 w-4 text-violet-400" /> ETF Watchlist — Live Prices
                 </CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                    <tr className="border-b border-gray-700/40 text-gray-400 text-xs bg-gray-900/60 backdrop-blur-sm sticky top-[4rem] z-10 shadow-sm">
                       {['Fund', 'Sector', 'Tags', 'Price', '24h', 'Expense', 'Rating'].map(h => (
                         <th key={h} className={`py-2 px-3 ${['Fund', 'Sector', 'Tags'].includes(h) ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>{h}</th>
                       ))}
@@ -1092,7 +1227,7 @@ export default function TradingDashboard() {
                       const isTop5 = ETF_RECOMMENDATIONS.some(r => r.symbol === etf.symbol);
                       const rec = ETF_RECOMMENDATIONS.find(r => r.symbol === etf.symbol);
                       return (
-                        <tr key={etf.symbol} className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${isTop5 ? 'bg-violet-950/10' : ''}`}>
+                        <tr key={etf.symbol} className={`border-b border-gray-800/40 hover:bg-gray-800/40 transition-all duration-300 group ${isTop5 ? 'bg-violet-950/10' : ''}`}>
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-2">
                               {isTop5
