@@ -25,6 +25,13 @@ from tradingview_mcp.core.services.backtest_service import (
     compare_strategies,
     walk_forward_backtest,
 )
+from tradingview_mcp.core.services.coingecko_service import (
+    get_bitcoin_dominance,
+    get_crypto_market_data,
+    get_bitcoin_fear_greed_index,
+    get_exchange_flows,
+    get_large_bitcoin_transactions,
+)
 from tradingview_mcp.core.services.sentiment_service import analyze_sentiment
 from tradingview_mcp.core.services.news_service import fetch_news_summary
 
@@ -121,6 +128,33 @@ def sentiment(symbol: str):
 def news(symbol: str):
     try:
         return fetch_news_summary(symbol.upper())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/crypto/overview")
+def crypto_overview(limit: int = Query(10, ge=1, le=50)):
+    """Return Bitcoin and crypto market research summary for the dashboard."""
+    try:
+        btc_price = get_price("BTC-USD")
+        return {
+            "btc_price": btc_price,
+            "bitcoin_dominance_pct": get_bitcoin_dominance(),
+            "fear_greed_index": get_bitcoin_fear_greed_index(),
+            "exchange_flows": get_exchange_flows(),
+            "large_transactions": get_large_bitcoin_transactions(5),
+            "top_cryptos": get_crypto_market_data(limit),
+            "timestamp": btc_price.get("timestamp"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/crypto/research")
+def crypto_research(period: str = Query("1y", description="1mo|3mo|6mo|1y|2y")):
+    """Return strategy research results for BTC using the full strategy ranking."""
+    try:
+        return compare_strategies("BTC-USD", period)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

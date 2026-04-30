@@ -25,3 +25,15 @@ export async function fetchBacktest(symbol: string, strategy = 'rsi', period = '
   if (!res.ok) throw new Error('backtest fetch failed');
   return res.json();
 }
+
+export async function fetchCryptoOverview(limit = 10) {
+  const res = await fetch(`${API_BASE}/api/crypto/overview?limit=${limit}`);
+  if (!res.ok) throw new Error('crypto overview fetch failed');
+  return res.json();
+}
+
+export async function fetchCryptoResearch(period = '1y') {
+  const res = await fetch(`${API_BASE}/api/crypto/research?period=${period}`);
+  if (!res.ok) throw new Error('crypto research fetch failed');
+  return res.json();
+}

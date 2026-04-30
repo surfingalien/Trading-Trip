@@ -3,8 +3,8 @@ Backtesting Service for tradingview-mcp — v3 (v0.7.0)
 
 Pure Python — no pandas, no numpy, no external backtesting libraries.
 
-Supported strategies (6):
-  rsi, bollinger, macd, ema_cross, supertrend, donchian
+Supported strategies (7):
+  rsi, bollinger, macd, ema_cross, supertrend, donchian, atr_breakout
 
 v0.7.0 additions:
   - 1h (hourly) timeframe support
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from tradingview_mcp.core.services.indicators_calc import (
-    calc_rsi, calc_bollinger, calc_macd, calc_ema, calc_supertrend, calc_donchian,
+    calc_rsi, calc_bollinger, calc_macd, calc_ema, calc_supertrend, calc_donchian, calc_atr,
 )
 
 _UA       = "tradingview-mcp/0.7.0 backtest-bot"
@@ -41,6 +41,7 @@ _STRATEGY_LABELS = {
     "ema_cross":  "EMA 20/50 Golden/Death Cross",
     "supertrend": "Supertrend (ATR-based Trend Following)",
     "donchian":   "Donchian Channel Breakout",
+    "atr_breakout": "ATR Volatility Breakout",
 }
 
 
@@ -193,6 +194,28 @@ def _run_donchian(candles, period=20, **_):
     return trades
 
 
+def _run_atr_breakout(candles, atr_period=14, multiplier=2.0, **_):
+    highs  = [c["high"]  for c in candles]
+    lows   = [c["low"]   for c in candles]
+    closes = [c["close"] for c in candles]
+    atr    = calc_atr(highs, lows, closes, atr_period)
+    trades, position = [], None
+    for i in range(atr_period, len(candles)):
+        if atr[i] is None:
+            continue
+        price, date = candles[i]["close"], candles[i]["date"]
+        prev_high = highs[i - 1]
+        prev_low  = lows[i - 1]
+        breakout_up = prev_high + multiplier * atr[i]
+        breakout_down = prev_low - multiplier * atr[i]
+        if position is None and price > breakout_up:
+            position = {"entry_date": date, "entry_price": price, "strategy": "atr_breakout"}
+        elif position is not None and price < breakout_down:
+            trades.append({**position, "exit_date": date, "exit_price": price})
+            position = None
+    return trades
+
+
 _STRATEGY_MAP = {
     "rsi":        _run_rsi,
     "bollinger":  _run_bollinger,
@@ -200,6 +223,7 @@ _STRATEGY_MAP = {
     "ema_cross":  _run_ema_cross,
     "supertrend": _run_supertrend,
     "donchian":   _run_donchian,
+    "atr_breakout": _run_atr_breakout,
 }
 
 
@@ -419,7 +443,7 @@ def compare_strategies(
     slippage_pct: float = 0.05,
     interval: str = "1d",
 ) -> dict:
-    """Run all 6 strategies on one symbol. Supports 1d and 1h intervals."""
+    """Run all 7 strategies on one symbol. Supports 1d and 1h intervals."""
     interval = interval.lower().strip()
     if interval not in _VALID_INTERVALS:
         return {"error": f"Invalid interval '{interval}'. Choose: 1d or 1h"}

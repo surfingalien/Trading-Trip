@@ -47,6 +47,13 @@ from tradingview_mcp.core.services.yahoo_finance_service import (
     get_price,
     get_market_snapshot,
 )
+from tradingview_mcp.core.services.coingecko_service import (
+    get_bitcoin_dominance,
+    get_crypto_market_data,
+    get_bitcoin_fear_greed_index,
+    get_large_bitcoin_transactions,
+    get_exchange_flows,
+)
 from tradingview_mcp.core.services.backtest_service import (
     run_backtest,
     compare_strategies as _compare_strategies,
@@ -534,7 +541,7 @@ def backtest_strategy(
 
     Args:
         symbol: Yahoo Finance symbol (AAPL, BTC-USD, THYAO.IS, ^GSPC)
-        strategy: rsi | bollinger | macd | ema_cross | supertrend | donchian
+        strategy: rsi | bollinger | macd | ema_cross | supertrend | donchian | atr_breakout
         period: '1mo', '3mo', '6mo', '1y', '2y'
         initial_capital: Starting capital in USD (default $10,000)
         commission_pct: Per-trade commission % (default 0.1%)
@@ -557,7 +564,7 @@ def compare_strategies(
     initial_capital: float = 10000.0,
     interval: str = "1d",
 ) -> dict:
-    """Run all 6 strategies (RSI, Bollinger, MACD, EMA Cross, Supertrend, Donchian) and return a ranked leaderboard.
+    """Run all 7 strategies (RSI, Bollinger, MACD, EMA Cross, Supertrend, Donchian, ATR Breakout) and return a ranked leaderboard.
 
     Args:
         symbol: Yahoo Finance symbol (AAPL, BTC-USD, SPY…)
@@ -584,7 +591,7 @@ def walk_forward_backtest_strategy(
 
     Args:
         symbol: Yahoo Finance symbol (AAPL, BTC-USD, SPY…)
-        strategy: rsi | bollinger | macd | ema_cross | supertrend | donchian
+        strategy: rsi | bollinger | macd | ema_cross | supertrend | donchian | atr_breakout
         period: '1mo', '3mo', '6mo', '1y', '2y' (recommend '2y')
         initial_capital: Starting capital per fold in USD (default $10,000)
         commission_pct: Per-trade commission % (default 0.1%)
@@ -617,6 +624,50 @@ def market_snapshot() -> dict:
     Powered by Yahoo Finance.
     """
     return get_market_snapshot()
+
+
+# ── On-chain & crypto market tools ─────────────────────────────────────────────
+
+@mcp.tool()
+def bitcoin_dominance() -> dict:
+    """Get current Bitcoin market cap dominance percentage."""
+    dominance = get_bitcoin_dominance()
+    return {"bitcoin_dominance_pct": dominance} if dominance else {"error": "Unable to fetch Bitcoin dominance"}
+
+
+@mcp.tool()
+def crypto_market_overview(limit: int = 10) -> list[dict]:
+    """Get top crypto market data including prices, market caps, and 24h changes.
+
+    Args:
+        limit: Number of top cryptocurrencies to return (max 50)
+    """
+    limit = max(1, min(limit, 50))
+    return get_crypto_market_data(limit)
+
+
+@mcp.tool()
+def bitcoin_fear_greed_index() -> dict:
+    """Get current Bitcoin Fear & Greed Index (0-100 scale)."""
+    index = get_bitcoin_fear_greed_index()
+    return {"fear_greed_index": index} if index else {"error": "Unable to fetch Fear & Greed Index"}
+
+
+@mcp.tool()
+def large_bitcoin_transactions(limit: int = 5) -> list[dict]:
+    """Get recent large Bitcoin transactions (whale movements).
+
+    Args:
+        limit: Number of transactions to return (max 10)
+    """
+    limit = max(1, min(limit, 10))
+    return get_large_bitcoin_transactions(limit)
+
+
+@mcp.tool()
+def bitcoin_exchange_flows() -> dict:
+    """Get Bitcoin exchange inflow/outflow data (24h)."""
+    return get_exchange_flows()
 
 
 # ── Resource ───────────────────────────────────────────────────────────────────

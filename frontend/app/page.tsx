@@ -22,7 +22,7 @@ import {
 } from '@/lib/portfolioData';
 import { usePortfolio } from '@/lib/usePortfolio';
 import { calcRiskMetrics, runMonteCarlo, getMeta } from '@/lib/analytics';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, fetchCryptoOverview, fetchCryptoResearch } from '@/lib/api';
 
 // ─── Formatting helpers ────────────────────────────────────────────────────
 const fmt$ = (n: number, dec = 2) =>
@@ -68,6 +68,16 @@ export default function TradingDashboard() {
 
   const [backtests, setBacktests] = useState<Record<string, { total_return_pct: number; win_rate_pct: number; sharpe_ratio: number; max_drawdown_pct: number; total_trades: number }>>({});
   const [loadingBT, setLoadingBT] = useState(false);
+  const [cryptoOverview, setCryptoOverview] = useState<{
+    btc_price?: { symbol: string; price: number; change_pct: number; currency?: string; source?: string };
+    bitcoin_dominance_pct?: number;
+    fear_greed_index?: number;
+    exchange_flows?: { inflow_24h: number; outflow_24h: number; net_flow_24h: number; source: string };
+    large_transactions?: Array<{ hash: string; value_btc: number; timestamp: string; from_address: string; to_address: string }>;
+    top_cryptos?: Array<{ symbol: string; name: string; price: number; market_cap: number; volume_24h: number; change_24h: number }>;
+  } | null>(null);
+  const [cryptoResearch, setCryptoResearch] = useState<{ winner?: string; ranking?: Array<{ strategy: string; strategy_label: string; total_return_pct: number; rank?: number }> } | null>(null);
+  const [btcHistory, setBtcHistory] = useState<Array<{ time: string; price: number }>>([]);
   const [snapshot, setSnapshot]   = useState<{ indices: { symbol: string; price: number; change_pct: number }[]; crypto: { symbol: string; price: number; change_pct: number }[]; etfs: { symbol: string; price: number; change_pct: number }[] } | null>(null);
   const [newAlertSym, setNewAlertSym] = useState('NVDA');
   const [newAlertThreshold, setNewAlertThreshold] = useState('');
@@ -129,6 +139,52 @@ export default function TradingDashboard() {
     };
     if (tab === 'crypto') fetchPrices(CRYPTO_WATCHLIST.map(c => c.symbol), setCryptoPrices);
     if (tab === 'etfs')   fetchPrices(ETF_WATCHLIST.map(e => e.symbol),   setEtfPrices);
+  }, [tab]);
+
+  useEffect(() => {
+    const loadCrypto = async () => {
+      if (tab !== 'crypto') return;
+      try {
+        const overview = await fetchCryptoOverview(8);
+        setCryptoOverview(overview);
+        if (overview?.btc_price?.price != null) {
+          setBtcHistory(prev => {
+            const next = [...prev, { time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), price: overview.btc_price.price }];
+            return next.slice(-16);
+          });
+        }
+      } catch {
+        setCryptoOverview(null);
+      }
+      try {
+        const research = await fetchCryptoResearch('1y');
+        setCryptoResearch(research);
+      } catch {
+        setCryptoResearch(null);
+      }
+    };
+
+    loadCrypto();
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'crypto') return;
+    const interval = window.setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/price/BTC-USD`);
+        if (!res.ok) return;
+        const data: { symbol: string; price: number; change_pct: number } = await res.json();
+        setCryptoOverview(prev => prev ? { ...prev, btc_price: data } : { btc_price: data });
+        setBtcHistory(prev => {
+          if (!data || data.price == null) return prev;
+          const next = [...prev, { time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), price: data.price }];
+          return next.slice(-16);
+        });
+      } catch {
+      }
+    }, 10000);
+
+    return () => window.clearInterval(interval);
   }, [tab]);
 
   // ── Search across all assets ──────────────────────────────────────────────
@@ -908,6 +964,132 @@ export default function TradingDashboard() {
         ─────────────────────────────────────────────────────────────────── */}
         {tab === 'crypto' && (
           <div className="space-y-4">
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-orange-400 text-base flex items-center gap-2">
+                  <Bitcoin className="h-4 w-4" /> Bitcoin Intelligence & Crypto Macro
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-gray-800 rounded-2xl p-4 border border-orange-900/30">
+                        <div className="text-xs uppercase text-gray-500 mb-2">BTC-USD price</div>
+                        <div className="text-3xl font-semibold text-white">
+                          {cryptoOverview?.btc_price?.price != null ? (cryptoOverview.btc_price.price >= 1000 ? fmt$(cryptoOverview.btc_price.price, 0) : fmt$(cryptoOverview.btc_price.price, 2)) : 'Loading…'}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-1">
+                          {typeof cryptoOverview?.btc_price?.change_pct === 'number' ? `${cryptoOverview.btc_price.change_pct >= 0 ? '+' : ''}${cryptoOverview.btc_price.change_pct.toFixed(2)}%` : ''}
+                        </div>
+                      </div>
+                      <div className="bg-gray-800 rounded-2xl p-4 border border-orange-900/30">
+                        <div className="text-xs uppercase text-gray-500 mb-2">Bitcoin dominance</div>
+                        <div className="text-3xl font-semibold text-white">
+                          {cryptoOverview?.bitcoin_dominance_pct != null ? `${cryptoOverview.bitcoin_dominance_pct}%` : '—'}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-1">Market share of total crypto market cap</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-2xl p-4 border border-orange-900/30">
+                        <div className="text-xs uppercase text-gray-500 mb-2">Fear & Greed</div>
+                        <div className="text-3xl font-semibold text-white">
+                          {cryptoOverview?.fear_greed_index != null ? cryptoOverview.fear_greed_index : '—'}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-1">Sentiment gauge for BTC traders</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-800 rounded-3xl p-4 border border-orange-900/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div className="text-sm uppercase text-gray-500">BTC Price History</div>
+                          <div className="text-xs text-gray-400">Updated every 10 seconds</div>
+                        </div>
+                        <div className="text-sm font-semibold text-white">{btcHistory.length} points</div>
+                      </div>
+                      {btcHistory.length ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={btcHistory} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid stroke="#222" strokeDasharray="3 3" />
+                            <XAxis dataKey="time" tick={{ fill: '#aaa', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#aaa', fontSize: 11 }} axisLine={false} tickLine={false} width={50} />
+                            <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} labelStyle={{ color: '#fff' }} />
+                            <Line type="monotone" dataKey="price" stroke="#f97316" strokeWidth={2} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-56 flex items-center justify-center text-gray-500">Loading historical BTC data…</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="bg-gray-800 rounded-3xl p-4 border border-orange-900/30">
+                      <div className="text-sm uppercase text-gray-500 mb-3">Exchange flow snapshot</div>
+                      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                        <div className="rounded-2xl bg-gray-900 p-4 border border-gray-800">
+                          <div className="text-gray-400 text-xs uppercase">Inflow 24h</div>
+                          <div className="text-lg font-semibold text-white">{cryptoOverview?.exchange_flows?.inflow_24h ?? '—'} BTC</div>
+                        </div>
+                        <div className="rounded-2xl bg-gray-900 p-4 border border-gray-800">
+                          <div className="text-gray-400 text-xs uppercase">Outflow 24h</div>
+                          <div className="text-lg font-semibold text-white">{cryptoOverview?.exchange_flows?.outflow_24h ?? '—'} BTC</div>
+                        </div>
+                        <div className="rounded-2xl bg-gray-900 p-4 border border-gray-800">
+                          <div className="text-gray-400 text-xs uppercase">Net flow</div>
+                          <div className="text-lg font-semibold text-white">{cryptoOverview?.exchange_flows?.net_flow_24h ?? '—'} BTC</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-xs text-gray-500">Source: {cryptoOverview?.exchange_flows?.source ?? 'CoinGecko / mock data'}</div>
+                      {cryptoOverview?.large_transactions?.length ? (
+                        <div className="mt-4 space-y-3">
+                          <div className="text-sm font-semibold text-white">Large BTC transactions</div>
+                          {cryptoOverview.large_transactions.slice(0, 2).map(tx => (
+                            <div key={tx.hash} className="rounded-2xl bg-gray-900 p-3 border border-gray-800">
+                              <div className="flex items-center justify-between gap-2 text-xs text-gray-400">
+                                <span>{tx.timestamp.replace('T', ' ').replace('Z', '')}</span>
+                                <span>{tx.value_btc.toFixed(0)} BTC</span>
+                              </div>
+                              <div className="mt-2 text-sm text-white">{tx.from_address} → {tx.to_address}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="bg-gray-800 rounded-3xl p-4 border border-orange-900/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div className="text-sm uppercase text-gray-500">BTC strategy research</div>
+                          <div className="text-xs text-gray-400">Best performing strategy over 1 year</div>
+                        </div>
+                        <Badge className="bg-emerald-700 text-white">{cryptoResearch?.winner?.replace('_', ' ').toUpperCase() ?? 'Loading'}</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {cryptoResearch?.ranking?.slice(0, 3).map(item => (
+                          <div key={item.strategy} className="rounded-2xl bg-gray-900 p-3 border border-gray-800">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <div className="text-xs text-gray-400 uppercase">{item.strategy_label}</div>
+                                <div className="font-semibold text-white">{item.strategy.replace('_', ' ').toUpperCase()}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-white font-semibold">{item.total_return_pct?.toFixed(2)}%</div>
+                                <div className="text-xs text-gray-500">Rank {item.rank}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {!cryptoResearch?.ranking?.length && (
+                          <div className="text-sm text-gray-500">Research data is loading or unavailable.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Top 5 Recommendations */}
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
