@@ -204,3 +204,66 @@ export const ETF_RECOMMENDATIONS: Array<{
     thesis: 'Gold at all-time highs driven by central bank de-dollarization (China, Russia, India). Portfolio hedge against geopolitical risk and inflation. Negative correlation to equities in downturns — essential for risk management.',
   },
 ];
+
+
+// ─── Price-Target Buy-Zone Alerts ───────────────────────────────────────────
+
+export interface BuyAlert {
+  symbol:      string;
+  name:        string;
+  assetType:   'crypto' | 'etf' | 'stock';
+  alertType:   'below';
+  threshold:   number;
+  entryZone:   string;
+  targetAlloc: string;
+  note:        string;
+  thesis:      string;
+}
+
+export const CRYPTO_ALERTS: BuyAlert[] = [
+  {
+    symbol: 'BTC-USD', name: 'Bitcoin', assetType: 'crypto', alertType: 'below',
+    threshold: 75000, entryZone: '$72k–$75k', targetAlloc: '5–8%',
+    note: 'ACCUMULATION ZONE',
+    thesis: 'Post-halving demand + institutional ETF floor. $72k is the breakout-retest of the 2021 ATH. Historical: every cycle sees 20–30% pullback after halving before resuming uptrend.',
+  },
+  {
+    symbol: 'ETH-USD', name: 'Ethereum', assetType: 'crypto', alertType: 'below',
+    threshold: 1600, entryZone: '$1,500–$1,600', targetAlloc: '3–5%',
+    note: 'MULTI-YEAR SUPPORT',
+    thesis: '$1,500–$1,600 has been major demand since the 2022 merge. ETH staking yield (3–4%) provides baseline floor. Pectra upgrade + restaking (EigenLayer) are 2025–26 tailwinds.',
+  },
+  {
+    symbol: 'SOL-USD', name: 'Solana', assetType: 'crypto', alertType: 'below',
+    threshold: 110, entryZone: '$100–$110', targetAlloc: '2–4%',
+    note: 'BREAKOUT RETEST',
+    thesis: '$100–$110 is the breakout level from Nov 2023. Solana DEX volume > Ethereum + all L2s combined in Q1 2025. Network revenue growing 4× YoY. Strong DePIN and consumer app traction.',
+  },
+  {
+    symbol: 'XRP-USD', name: 'XRP / Ripple', assetType: 'crypto', alertType: 'below',
+    threshold: 1.80, entryZone: '$1.70–$1.80', targetAlloc: '1–2%',
+    note: 'PRE-BREAKOUT BASE',
+    thesis: 'SEC lawsuit resolved. ODL (On-Demand Liquidity) cross-border volumes growing with bank partnerships. RLUSD stablecoin launch adds utility. Regulatory clarity = re-rating catalyst.',
+  },
+  {
+    symbol: 'AVAX-USD', name: 'Avalanche', assetType: 'crypto', alertType: 'below',
+    threshold: 18, entryZone: '$16–$18', targetAlloc: '1–2%',
+    note: 'DEMAND ZONE',
+    thesis: 'Avalanche L1s (formerly subnets) attracting institutional chains: BlackRock BUIDL, JPMorgan Onyx. $16–$18 is the 2023 accumulation base. Lower risk / lower reward vs SOL.',
+  },
+];
+
+export const ETF_ALERTS: BuyAlert[] = [
+  {
+    symbol: 'QQQ', name: 'Invesco QQQ', assetType: 'etf', alertType: 'below',
+    threshold: 420, entryZone: '$415–$420', targetAlloc: '5–10%',
+    note: 'DIP TO BUY ZONE',
+    thesis: 'QQQ at $420 implies ~15% pullback from ATH — historically a high-probability entry for 12-month holds. Top 10 holdings = Mag-7 + AVGO + COST. AI capex cycle still early.',
+  },
+  {
+    symbol: 'VGT', name: 'Vanguard IT ETF', assetType: 'etf', alertType: 'below',
+    threshold: 540, entryZone: '$530–$540', targetAlloc: '3–5%',
+    note: 'TECH Sector FLOOR',
+    thesis: 'VGT at $540 = 14% off ATH. 0.10% expense ratio (cheapest tech ETF). 60%+ weight in semiconductors + software. Preferred to QQQ for pure tech exposure without Amazon/Alphabet.',
+  },
+];
