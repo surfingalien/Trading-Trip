@@ -43,8 +43,11 @@ def rsi(series: pd.Series, n: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(n).mean()
     loss = (-delta.clip(upper=0)).rolling(n).mean()
-    rs   = gain / loss.replace(0, np.nan)
-    return 100 - 100 / (1 + rs)
+    rs     = gain / loss.replace(0, np.nan)
+    result = 100 - 100 / (1 + rs)
+    # Pure uptrend: loss == 0 after window fills → RSI should be 100
+    result = result.where(~((loss == 0) & gain.notna()), other=100.0)
+    return result
 
 
 def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
@@ -71,7 +74,8 @@ def bollinger_bands(close: pd.Series, n: int = 20, k: float = 2.0):
     upper  = sma + k * std
     lower  = sma - k * std
     pct_b  = (close - lower) / (upper - lower).replace(0, np.nan)
-    return upper, sma, lower, pct_b
+    width  = (upper - lower) / sma.replace(0, np.nan)
+    return upper, sma, lower, pct_b, width
 
 
 def volume_ratio(vol: pd.Series, n: int = 20) -> pd.Series:
@@ -327,7 +331,7 @@ async def _build_technical_context(symbol: str) -> TechnicalContext:
     _, _, hist = macd(close)
     a14  = atr(high, low, close, 14)
     vr   = volume_ratio(vol, 20)
-    _, _, _, pct_b = bollinger_bands(close, 20)
+    _, _, _, pct_b, _ = bollinger_bands(close, 20)
 
     return TechnicalContext(
         close=float(close.iloc[-1]),
