@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies (lite subset for CI)
         run: |
           pip install fastapi pydantic pydantic-settings numpy pandas \
-                      pytest pytest-asyncio httpx
+                      pytest pytest-asyncio httpx yfinance asyncpg
 
       - name: Run unit tests
         run: |
