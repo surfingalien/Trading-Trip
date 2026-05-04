@@ -1,14 +1,102 @@
-version: '3.8'
-
 services:
-  tradingview-mcp:
-    build: .
-    image: atilaahmet/tradingview-mcp:latest
-    container_name: tradingview-mcp
-    ports:
-      - "8080:8000"
+  # ── PostgreSQL ─────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      # Optional: Add any future API keys or environment variables here
-      - PORT=8000
-      - HOST=0.0.0.0
+      POSTGRES_DB: finsight
+      POSTGRES_USER: finsight
+      POSTGRES_PASSWORD: finsight
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finsight -d finsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── FastAPI Backend ────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://finsight:finsight@postgres:5432/finsight
+      DATABASE_SYNC_URL: postgresql://finsight:finsight@postgres:5432/finsight
+      REDIS_URL: redis://redis:6379/0
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      POLYGON_API_KEY: ${POLYGON_API_KEY:-}
+      MODEL_DIR: /app/backend/ml/models
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://surfingalien.github.io,http://localhost:5173}
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ml_models:/app/backend/ml/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Typesense (optional search) ────────────────────────────
+  typesense:
+    image: typesense/typesense:0.25.2
+    restart: unless-stopped
+    environment:
+      TYPESENSE_DATA_DIR: /data
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-finsight-ts-key}
+    volumes:
+      - typesense_data:/data
+    ports:
+      - "8108:8108"
+    profiles:
+      - search   # Only started with: docker compose --profile search up
+
+  # ── MLflow (model registry) ────────────────────────────────
+  mlflow:
+    image: python:3.11-slim
+    restart: unless-stopped
+    command: >
+      sh -c "pip install mlflow -q &&
+             mlflow server --host 0.0.0.0 --port 5000
+             --backend-store-uri sqlite:////mlflow/mlflow.db
+             --artifact-root /mlflow/artifacts"
+    volumes:
+      - mlflow_data:/mlflow
+    ports:
+      - "5000:5000"
+    profiles:
+      - ml   # Only started with: docker compose --profile ml up
+
+volumes:
+  postgres_data:
+  redis_data:
+  ml_models:
+  typesense_data:
+  mlflow_data:

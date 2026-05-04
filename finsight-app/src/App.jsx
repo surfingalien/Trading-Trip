@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   PieChart, Pie, Cell, XAxis, YAxis, Tooltip,
@@ -12,7 +12,8 @@ import {
   AlertCircle, AlertTriangle, Info, CheckCircle2, Home,
   Settings, RefreshCw, Wifi, Key,
   Calculator, PiggyBank, Calendar, Lightbulb, ShieldAlert,
-  Wallet, BookOpen, Menu
+  Wallet, BookOpen, Menu, Brain, TrendingUp as Trend,
+  Crosshair, BarChart2, Globe, Clock
 } from 'lucide-react';
 
 /* ============================================================
@@ -1043,6 +1044,8 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
     { key: 'recommendations', label: 'Recommendations', icon: Lightbulb },
     { key: 'retirement',      label: 'Retirement',      icon: PiggyBank },
     { key: 'analytics',       label: 'Analytics',       icon: BarChart3 },
+    { key: 'tips',            label: 'Trading Tips',    icon: Crosshair,  badge: 'NEW' },
+    { key: 'predict',         label: 'ML Forecast',     icon: Brain,       badge: 'NEW' },
     { key: 'news',            label: 'News',            icon: Newspaper },
     { key: 'activity',        label: 'Activity',        icon: Activity },
   ];
@@ -1073,7 +1076,11 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
                   style={{ color: isActive ? C.text : C.textDim, background: isActive ? C.surface : 'transparent' }}>
                   {isActive && <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r" style={{ background: C.gold }} />}
                   <Icon size={15} strokeWidth={1.8} />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge && !isActive && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold tracking-wider"
+                      style={{ background: C.gold + '25', color: C.gold }}>{item.badge}</span>
+                  )}
                 </button>
               </li>
             );
@@ -2760,6 +2767,705 @@ const TransactionModal = ({ open, prefilledSymbol, prefilledType, prices, holdin
   );
 };
 /* ============================================================
+   BACKEND API CONFIG
+   ============================================================ */
+const API_BASE = import.meta.env.VITE_API_URL || 'https://finsight-api.onrender.com';
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
+  return r.json();
+}
+
+/* ============================================================
+   SEARCH BAR  — debounced, keyboard navigation, recent cache
+   ============================================================ */
+const MAX_RECENT = 6;
+
+function useDebounce(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+const SearchBar = ({ onSelect }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(-1);
+  const [recent, setRecent] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('finsight-recent-searches') || '[]'); }
+    catch { return []; }
+  });
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  const debounced = useDebounce(query, 300);
+
+  useEffect(() => {
+    if (!debounced.trim()) { setResults([]); setOpen(!!recent.length); return; }
+    setLoading(true);
+    apiFetch(`/api/search?q=${encodeURIComponent(debounced)}&limit=8`)
+      .then(d => { setResults(d.results || []); setOpen(true); setCursor(-1); })
+      .catch(() => setResults([]))
+      .finally(() => setLoading(false));
+  }, [debounced]);
+
+  const saveRecent = useCallback((item) => {
+    const next = [item, ...recent.filter(r => r.symbol !== item.symbol)].slice(0, MAX_RECENT);
+    setRecent(next);
+    localStorage.setItem('finsight-recent-searches', JSON.stringify(next));
+  }, [recent]);
+
+  const handleSelect = useCallback((item) => {
+    saveRecent(item);
+    setQuery('');
+    setOpen(false);
+    onSelect?.(item);
+  }, [saveRecent, onSelect]);
+
+  const handleKey = (e) => {
+    const items = results.length ? results : recent;
+    if (!open) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => Math.min(c + 1, items.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => Math.max(c - 1, -1)); }
+    else if (e.key === 'Enter' && cursor >= 0) { e.preventDefault(); handleSelect(items[cursor]); }
+    else if (e.key === 'Escape') { setOpen(false); setCursor(-1); }
+  };
+
+  const displayItems = results.length ? results : (query ? [] : recent);
+  const matchTypeColor = { exact_symbol: C.gold, prefix: C.info, fuzzy: C.textDim, fts: C.pos, synonym: '#a587c1', fallback: C.textFaint };
+
+  return (
+    <div className="relative w-full max-w-md">
+      <div className="flex items-center gap-2 px-3 h-9 rounded-lg border"
+        style={{ background: C.surface2, borderColor: open ? C.gold : C.border }}>
+        <Search size={14} style={{ color: C.textDim, flexShrink: 0 }} />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={handleKey}
+          placeholder="Search symbol or company…"
+          className="flex-1 bg-transparent text-sm outline-none"
+          style={{ color: C.text }}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {loading && <div className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent spin" style={{ borderColor: C.gold + '60', borderTopColor: C.gold }} />}
+        {query && !loading && (
+          <button onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}>
+            <X size={12} style={{ color: C.textDim }} />
+          </button>
+        )}
+      </div>
+
+      {open && displayItems.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border z-50 py-1 scale-in"
+          style={{ background: C.surface, borderColor: C.borderL, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+          {!results.length && recent.length > 0 && (
+            <div className="px-3 py-1.5 text-xs font-medium uppercase tracking-wider"
+              style={{ color: C.textFaint }}>Recent</div>
+          )}
+          {displayItems.map((item, idx) => (
+            <button
+              key={item.symbol}
+              onMouseDown={() => handleSelect(item)}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors"
+              style={{ background: cursor === idx ? C.surface2 : 'transparent' }}>
+              <div className="w-10 text-center shrink-0">
+                <span className="font-mono text-xs font-semibold" style={{ color: C.gold }}>{item.symbol}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm truncate" style={{ color: C.text }}>{item.name}</div>
+                <div className="text-xs" style={{ color: C.textDim }}>{item.exchange} · {item.sector}</div>
+              </div>
+              {item.match_type && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded"
+                  style={{ background: matchTypeColor[item.match_type] + '20', color: matchTypeColor[item.match_type] }}>
+                  {item.match_type.replace('_', ' ')}
+                </span>
+              )}
+            </button>
+          ))}
+          {query && !results.length && !loading && (
+            <div className="px-3 py-2 text-sm" style={{ color: C.textDim }}>No results for "{query}"</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
+   MARKET REGIME BANNER
+   ============================================================ */
+const regimePalette = {
+  bullish_trend:    { bg: 'rgba(95,168,114,0.12)',  border: '#5fa872', dot: '#5fa872'  },
+  bearish_trend:    { bg: 'rgba(201,112,73,0.12)',  border: '#c97049', dot: '#c97049'  },
+  range_bound:      { bg: 'rgba(212,169,69,0.12)',  border: '#d4a945', dot: '#d4a945'  },
+  high_vol_stress:  { bg: 'rgba(220,80,80,0.18)',   border: '#e05555', dot: '#e05555'  },
+};
+
+const MarketRegimeBanner = () => {
+  const [regime, setRegime] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await apiFetch('/api/regime');
+      setRegime(data);
+    } catch { /* no-op — banner stays hidden */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); const id = setInterval(load, 300_000); return () => clearInterval(id); }, [load]);
+
+  if (loading || !regime) return null;
+  const pal = regimePalette[regime.regime] || regimePalette.range_bound;
+
+  return (
+    <div className="px-8 pt-3">
+      <div className="rounded-lg border px-4 py-2.5 fade-in"
+        style={{ background: pal.bg, borderColor: pal.border }}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+          <span className="text-base">{regime.emoji}</span>
+          <div className="flex-1 flex flex-wrap items-center gap-x-4 gap-y-0.5">
+            <span className="text-sm font-semibold" style={{ color: pal.dot }}>
+              Market Regime: {regime.label}
+            </span>
+            <span className="text-xs" style={{ color: C.textDim }}>
+              VIX {regime.vix?.toFixed(1)} · Confidence {regime.confidence}%
+            </span>
+            <span className="hidden md:inline text-xs" style={{ color: C.text }}>
+              {regime.risk_environment}
+            </span>
+          </div>
+          <ChevronDown size={14} style={{ color: C.textDim, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </div>
+
+        {expanded && (
+          <div className="mt-3 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 border-t" style={{ borderColor: pal.border + '40' }}>
+            <div>
+              <p className="text-xs font-medium mb-1" style={{ color: C.textDim }}>Recommended Action</p>
+              <p className="text-xs leading-relaxed" style={{ color: C.text }}>{regime.recommended_action}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-1" style={{ color: C.textDim }}>Strategy Notes</p>
+              <ul className="space-y-0.5">
+                {regime.strategy_notes?.map((note, i) => (
+                  <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: C.text }}>
+                    <span style={{ color: pal.dot }}>·</span>{note}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-1.5" style={{ color: C.textDim }}>Position Size Adjustment</p>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 flex-1 rounded-full" style={{ background: C.surface3 }}>
+                  <div className="h-full rounded-full" style={{ width: `${(regime.position_size_adj || 1) * 100}%`, background: pal.dot }} />
+                </div>
+                <span className="text-xs font-mono font-semibold" style={{ color: pal.dot }}>
+                  {((regime.position_size_adj || 1) * 100).toFixed(0)}%
+                </span>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-1" style={{ color: C.textDim }}>Preferred Sectors</p>
+              <div className="flex flex-wrap gap-1">
+                {regime.preferred_sectors?.map(s => (
+                  <span key={s} className="text-[10px] px-2 py-0.5 rounded-full"
+                    style={{ background: pal.dot + '20', color: pal.dot }}>{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================
+   TRADING TIPS VIEW
+   ============================================================ */
+const TradingTipsView = ({ portfolio }) => {
+  const [symbol, setSymbol] = useState('');
+  const [tip, setTip] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const portfolioEquity = portfolio?.value || 100_000;
+
+  const fetchTip = useCallback(async (sym) => {
+    if (!sym) return;
+    setLoading(true); setError(null); setTip(null);
+    try {
+      const data = await apiFetch(`/api/tips/${sym}?portfolio_equity=${portfolioEquity}`);
+      setTip(data);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, [portfolioEquity]);
+
+  const signalColors = {
+    buy_setup: C.pos, neutral: C.gold, no_signal: C.textDim, sell_setup: C.neg,
+  };
+  const signalLabels = {
+    buy_setup: 'Buy Setup', neutral: 'Neutral / Watch', no_signal: 'No Signal', sell_setup: 'Sell Setup',
+  };
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center gap-3">
+        <Crosshair size={20} style={{ color: C.gold }} />
+        <div>
+          <h2 className="text-xl font-semibold font-serif" style={{ color: C.text }}>Trading Tips Engine</h2>
+          <p className="text-xs" style={{ color: C.textDim }}>ATR-based entry / stop-loss / position sizing · 1% portfolio risk</p>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <SearchBar onSelect={item => fetchTip(item.symbol)} />
+        <button
+          onClick={() => { if (symbol) fetchTip(symbol.toUpperCase()); }}
+          disabled={loading}
+          className="btn-primary px-4 h-9 rounded-lg text-sm font-medium shrink-0">
+          {loading ? 'Analyzing…' : 'Analyze'}
+        </button>
+      </div>
+
+      {/* Quick picks from holdings */}
+      {!tip && !loading && (
+        <div className="flex flex-wrap gap-2">
+          <span className="text-xs" style={{ color: C.textDim }}>Quick analyze:</span>
+          {portfolio?.positions?.slice(0, 8).map(p => (
+            <button key={p.symbol}
+              onClick={() => fetchTip(p.symbol)}
+              className="text-xs px-2.5 py-1 rounded-full border transition-colors"
+              style={{ borderColor: C.border, color: C.textDim }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = C.gold}
+              onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+              {p.symbol}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
+          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <div key={i} className="h-32 rounded-xl skeleton" />)}
+        </div>
+      )}
+
+      {tip && (
+        <div className="space-y-4">
+          {/* Signal header */}
+          <div className="rounded-xl border p-5" style={{ background: C.surface2, borderColor: C.border }}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-2xl font-mono font-bold" style={{ color: C.text }}>{tip.symbol}</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                    style={{ background: (signalColors[tip.signal_type] || C.textDim) + '20', color: signalColors[tip.signal_type] || C.textDim }}>
+                    {signalLabels[tip.signal_type] || tip.signal_type}
+                  </span>
+                </div>
+                <p className="text-sm" style={{ color: C.textDim }}>{tip.regime_note}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-xs mb-1" style={{ color: C.textDim }}>Confidence</div>
+                <div className="text-3xl font-serif font-bold" style={{ color: signalColors[tip.signal_type] || C.text }}>
+                  {tip.confidence?.toFixed(0)}%
+                </div>
+              </div>
+            </div>
+
+            {/* Confidence bar */}
+            <div className="mt-3 h-1.5 rounded-full" style={{ background: C.surface3 }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${tip.confidence}%`, background: signalColors[tip.signal_type] || C.gold }} />
+            </div>
+          </div>
+
+          {/* Trade plan grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Entry */}
+            <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.info + '20' }}>
+                  <Target size={13} style={{ color: C.info }} />
+                </div>
+                <span className="text-sm font-semibold" style={{ color: C.text }}>Entry Zone</span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: C.textDim }}>Low</span>
+                  <span className="font-mono font-semibold" style={{ color: C.text }}>${tip.entry_low?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: C.textDim }}>High</span>
+                  <span className="font-mono font-semibold" style={{ color: C.text }}>${tip.entry_high?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: C.textDim }}>Current</span>
+                  <span className="font-mono font-semibold" style={{ color: C.gold }}>${tip.technicals?.price?.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Stop-loss */}
+            <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.neg + '20' }}>
+                  <Shield size={13} style={{ color: C.neg }} />
+                </div>
+                <span className="text-sm font-semibold" style={{ color: C.text }}>Stop-Loss</span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: C.textDim }}>{tip.stop_loss?.method?.toUpperCase()} Stop</span>
+                  <span className="font-mono font-semibold" style={{ color: C.neg }}>${tip.stop_loss?.stop_loss?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: C.textDim }}>ATR({tip.stop_loss?.atr_multiple}×)</span>
+                  <span className="font-mono" style={{ color: C.textDim }}>${tip.stop_loss?.atr_stop?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span style={{ color: C.textDim }}>Structural</span>
+                  <span className="font-mono" style={{ color: C.textDim }}>${tip.stop_loss?.structural_stop?.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Targets */}
+            {tip.targets ? (
+              <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.pos + '20' }}>
+                    <TrendingUp size={13} style={{ color: C.pos }} />
+                  </div>
+                  <span className="text-sm font-semibold" style={{ color: C.text }}>Take-Profit</span>
+                  <span className="text-xs ml-auto font-mono" style={{ color: C.gold }}>R:R {tip.targets.rr_ratio}:1</span>
+                </div>
+                <div className="space-y-1.5">
+                  {['tp1', 'tp2', 'tp3'].map(tp => (
+                    <div key={tp} className="flex justify-between text-xs">
+                      <span style={{ color: C.textDim }}>TP{tp[2]} ({tip.targets[tp + '_r']})</span>
+                      <span className="font-mono font-semibold" style={{ color: C.pos }}>${tip.targets[tp]?.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border p-4 flex items-center justify-center" style={{ background: C.surface, borderColor: C.border }}>
+                <p className="text-xs text-center" style={{ color: C.textDim }}>R:R &lt; 1:2 — trade plan rejected.<br />Waiting for better entry point.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Position sizing */}
+          {tip.position_size && (
+            <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+              <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Position Sizing</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Shares', val: tip.position_size.shares?.toFixed(2) },
+                  { label: 'Position Value', val: `$${tip.position_size.position_value?.toLocaleString()}` },
+                  { label: 'Allocation', val: `${tip.position_size.position_pct?.toFixed(1)}%` },
+                  { label: 'Max $ Risk', val: `$${tip.position_size.dollar_risk?.toLocaleString()}` },
+                ].map(({ label, val }) => (
+                  <div key={label}>
+                    <p className="text-xs mb-0.5" style={{ color: C.textDim }}>{label}</p>
+                    <p className="font-mono font-semibold" style={{ color: C.text }}>{val}</p>
+                  </div>
+                ))}
+              </div>
+              {tip.position_size.capped_by_allocation && (
+                <p className="mt-2 text-xs" style={{ color: C.gold }}>Position capped at 5% allocation limit.</p>
+              )}
+            </div>
+          )}
+
+          {/* Rationale */}
+          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+            <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Signal Rationale</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium mb-2 uppercase tracking-wider" style={{ color: C.textFaint }}>Technical</p>
+                <ul className="space-y-1">
+                  {tip.rationale?.technical?.map((r, i) => (
+                    <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: C.textDim }}>
+                      <span style={{ color: C.gold }}>·</span>{r}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-medium mb-2 uppercase tracking-wider" style={{ color: C.textFaint }}>Risk &amp; Sizing</p>
+                <ul className="space-y-1">
+                  {[...tip.rationale?.risk || [], ...tip.rationale?.sizing || []].map((r, i) => (
+                    <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: C.textDim }}>
+                      <span style={{ color: C.info }}>·</span>{r}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Technicals grid */}
+          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+            <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Technical Snapshot</p>
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+              {[
+                { label: 'RSI(14)', val: tip.technicals?.rsi14?.toFixed(1), color: tip.technicals?.rsi14 > 70 ? C.neg : tip.technicals?.rsi14 < 30 ? C.pos : C.text },
+                { label: 'EMA 20', val: `$${tip.technicals?.ema20?.toFixed(2)}`, color: C.text },
+                { label: 'EMA 50', val: `$${tip.technicals?.ema50?.toFixed(2)}`, color: C.text },
+                { label: 'ATR(14)', val: `$${tip.technicals?.atr14?.toFixed(2)}`, color: C.text },
+                { label: 'Vol Ratio', val: `${tip.technicals?.volume_ratio?.toFixed(2)}×`, color: tip.technicals?.volume_ratio > 1.5 ? C.pos : C.text },
+                { label: 'VIX', val: tip.technicals?.vix?.toFixed(1), color: tip.technicals?.vix > 25 ? C.neg : C.text },
+              ].map(({ label, val, color }) => (
+                <div key={label} className="text-center">
+                  <p className="text-[10px] mb-1" style={{ color: C.textFaint }}>{label}</p>
+                  <p className="font-mono text-sm font-semibold" style={{ color }}>{val}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-xs" style={{ color: C.textFaint }}>{tip.disclaimer}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
+   ML PREDICTION VIEW
+   ============================================================ */
+const PredictionView = ({ portfolio }) => {
+  const [symbol, setSymbol] = useState('');
+  const [horizon, setHorizon] = useState(7);
+  const [prediction, setPrediction] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchPrediction = useCallback(async (sym, hor, refresh = false) => {
+    if (!sym) return;
+    setLoading(true); setError(null);
+    try {
+      const data = await apiFetch(`/api/predict?symbol=${sym}&horizon=${hor}${refresh ? '&refresh=true' : ''}`);
+      setPrediction(data);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  const horizonLabels = { 7: '7-Day', 30: '30-Day', 90: '90-Day' };
+  const probColors = p => p >= 0.6 ? C.pos : p >= 0.4 ? C.gold : C.neg;
+
+  const chartData = prediction ? [
+    { label: 'Current', price: prediction.base_price, lower: prediction.base_price, upper: prediction.base_price },
+    { label: `+${horizon}d (Bear)`, price: prediction.scenarios?.find(s => s.scenario === 'Bear')?.price, lower: prediction.lower_bound, upper: prediction.lower_bound },
+    { label: `+${horizon}d (Base)`, price: prediction.predicted_price, lower: prediction.lower_bound, upper: prediction.upper_bound },
+    { label: `+${horizon}d (Bull)`, price: prediction.scenarios?.find(s => s.scenario === 'Bull')?.price, lower: prediction.upper_bound, upper: prediction.upper_bound },
+  ].filter(d => d.price) : [];
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center gap-3">
+        <Brain size={20} style={{ color: C.gold }} />
+        <div>
+          <h2 className="text-xl font-semibold font-serif" style={{ color: C.text }}>ML Price Prediction</h2>
+          <p className="text-xs" style={{ color: C.textDim }}>XGBoost + LSTM ensemble · Walk-forward validated · 80% confidence intervals</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <SearchBar onSelect={item => { setSymbol(item.symbol); fetchPrediction(item.symbol, horizon); }} />
+        <div className="flex gap-1 p-1 rounded-lg" style={{ background: C.surface2 }}>
+          {[7, 30, 90].map(h => (
+            <button key={h}
+              onClick={() => { setHorizon(h); if (symbol) fetchPrediction(symbol, h); }}
+              className="px-3 h-7 rounded-md text-xs font-medium transition-colors"
+              style={{ background: horizon === h ? C.gold : 'transparent', color: horizon === h ? C.ink : C.textDim }}>
+              {horizonLabels[h]}
+            </button>
+          ))}
+        </div>
+        {prediction && (
+          <button onClick={() => fetchPrediction(symbol || prediction.symbol, horizon, true)}
+            disabled={loading}
+            className="btn-ghost px-3 h-9 rounded-lg text-xs flex items-center gap-1.5">
+            <RefreshCw size={12} className={loading ? 'spin' : ''} />Refresh
+          </button>
+        )}
+      </div>
+
+      {/* Quick picks from portfolio */}
+      {!prediction && !loading && (
+        <div className="flex flex-wrap gap-2">
+          <span className="text-xs" style={{ color: C.textDim }}>Quick predict:</span>
+          {portfolio?.positions?.slice(0, 6).map(p => (
+            <button key={p.symbol}
+              onClick={() => { setSymbol(p.symbol); fetchPrediction(p.symbol, horizon); }}
+              className="text-xs px-2.5 py-1 rounded-full border transition-colors"
+              style={{ borderColor: C.border, color: C.textDim }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = C.gold}
+              onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+              {p.symbol}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
+          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+          {error.includes('not found') && (
+            <p className="text-xs mt-1" style={{ color: C.textDim }}>Train the model first: <code>python -m backend.ml.pipeline --symbol {symbol} --horizon {horizon}</code></p>
+          )}
+        </div>
+      )}
+
+      {loading && (
+        <div className="space-y-4">
+          <div className="h-48 rounded-xl skeleton" />
+          <div className="grid grid-cols-3 gap-4">{[1,2,3].map(i => <div key={i} className="h-24 rounded-xl skeleton" />)}</div>
+        </div>
+      )}
+
+      {prediction && (
+        <div className="space-y-4">
+          {/* Hero card */}
+          <div className="rounded-xl border p-5" style={{ background: C.surface2, borderColor: C.border }}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-2xl font-mono font-bold" style={{ color: C.text }}>{prediction.symbol}</span>
+                  <span className="text-sm px-2 py-0.5 rounded" style={{ background: C.surface3, color: C.textDim }}>
+                    {horizonLabels[prediction.horizon_days]} Forecast
+                  </span>
+                  {prediction.cached && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.surface3, color: C.textFaint }}>cached</span>}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-serif font-bold" style={{ color: prediction.predicted_return_pct >= 0 ? C.pos : C.neg }}>
+                    {prediction.predicted_return_pct >= 0 ? '+' : ''}{prediction.predicted_return_pct?.toFixed(2)}%
+                  </span>
+                  <span className="text-lg" style={{ color: C.text }}>${prediction.predicted_price?.toFixed(2)}</span>
+                </div>
+                <p className="text-sm mt-0.5" style={{ color: C.textDim }}>from ${prediction.base_price?.toFixed(2)}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs mb-1" style={{ color: C.textDim }}>80% CI</p>
+                <p className="font-mono font-semibold" style={{ color: C.text }}>${prediction.lower_bound?.toFixed(2)}</p>
+                <p className="text-xs" style={{ color: C.textDim }}>to</p>
+                <p className="font-mono font-semibold" style={{ color: C.text }}>${prediction.upper_bound?.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Price bar viz */}
+            {(() => {
+              const lo = prediction.lower_bound, hi = prediction.upper_bound, base = prediction.base_price, pred = prediction.predicted_price;
+              const range = hi - lo || 1;
+              const pos = (v) => `${((v - lo) / range * 100).toFixed(1)}%`;
+              return (
+                <div className="mt-4 relative h-6">
+                  <div className="absolute inset-y-0 left-0 right-0 rounded-full" style={{ background: C.surface3 }} />
+                  <div className="absolute inset-y-0 rounded-full" style={{ left: pos(lo), right: `${(100 - ((hi - lo) / range * 100)).toFixed(1)}%`, background: prediction.predicted_return_pct >= 0 ? C.pos + '30' : C.neg + '30' }} />
+                  <div className="absolute top-0 bottom-0 w-0.5" style={{ left: pos(base), background: C.textDim }} />
+                  <div className="absolute top-0 bottom-0 w-1 rounded-full" style={{ left: `calc(${pos(pred)} - 2px)`, background: prediction.predicted_return_pct >= 0 ? C.pos : C.neg }} />
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Upside probabilities */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: 'P(Up > 5%)', val: prediction.prob_up_5pct },
+              { label: 'P(Up > 10%)', val: prediction.prob_up_10pct },
+              { label: 'P(Up > 15%)', val: prediction.prob_up_15pct },
+            ].map(({ label, val }) => (
+              <div key={label} className="rounded-xl border p-4 text-center" style={{ background: C.surface, borderColor: C.border }}>
+                <p className="text-xs mb-2" style={{ color: C.textDim }}>{label}</p>
+                <p className="text-2xl font-serif font-bold" style={{ color: probColors(val) }}>
+                  {(val * 100).toFixed(0)}%
+                </p>
+                <div className="mt-2 h-1 rounded-full" style={{ background: C.surface3 }}>
+                  <div className="h-full rounded-full" style={{ width: `${val * 100}%`, background: probColors(val) }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Scenario table */}
+          <div className="rounded-xl border" style={{ background: C.surface, borderColor: C.border }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: C.border }}>
+              <p className="text-sm font-semibold" style={{ color: C.text }}>Scenario Analysis</p>
+            </div>
+            <div className="divide-y" style={{ borderColor: C.border }}>
+              {prediction.scenarios?.map(s => (
+                <div key={s.scenario} className="px-4 py-3 flex items-center gap-4">
+                  <span className="w-12 text-xs font-medium" style={{ color: s.scenario === 'Bull' ? C.pos : s.scenario === 'Bear' ? C.neg : C.gold }}>{s.scenario}</span>
+                  <div className="flex-1 h-1.5 rounded-full" style={{ background: C.surface3 }}>
+                    <div className="h-full rounded-full"
+                      style={{ width: `${s.probability * 100}%`, background: s.scenario === 'Bull' ? C.pos : s.scenario === 'Bear' ? C.neg : C.gold }} />
+                  </div>
+                  <span className="w-10 text-xs text-right" style={{ color: C.textDim }}>{(s.probability * 100).toFixed(0)}%</span>
+                  <span className="w-20 font-mono text-sm text-right font-semibold" style={{ color: s.return_pct >= 0 ? C.pos : C.neg }}>
+                    {s.return_pct >= 0 ? '+' : ''}{s.return_pct?.toFixed(2)}%
+                  </span>
+                  <span className="w-20 font-mono text-sm text-right" style={{ color: C.text }}>${s.price?.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Model meta */}
+          {prediction.model_meta && (
+            <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs font-medium mb-2" style={{ color: C.textDim }}>Model Information</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Version', val: prediction.model_meta.version?.slice(0,8) || '—' },
+                  { label: 'Dir. Accuracy', val: `${((prediction.model_meta.directional_accuracy || 0) * 100).toFixed(1)}%` },
+                  { label: 'XGB Weight', val: `${((prediction.model_meta.xgb_weight || 0.6) * 100).toFixed(0)}%` },
+                  { label: 'LSTM Weight', val: `${((prediction.model_meta.lstm_weight || 0.4) * 100).toFixed(0)}%` },
+                ].map(({ label, val }) => (
+                  <div key={label}>
+                    <p className="text-[10px] mb-0.5" style={{ color: C.textFaint }}>{label}</p>
+                    <p className="text-sm font-mono" style={{ color: C.text }}>{val}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg p-3 border-l-2" style={{ borderColor: C.gold, background: C.surface2 }}>
+            <p className="text-xs leading-relaxed" style={{ color: C.textDim }}>{prediction.disclaimer}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
    MAIN APP
    ============================================================ */
 export default function App() {
@@ -2863,6 +3569,8 @@ export default function App() {
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />
 
+          <MarketRegimeBanner />
+
           <main className="flex-1 overflow-y-auto px-8 py-8">
             <div className="max-w-7xl mx-auto">
               {view === 'dashboard' && (
@@ -2888,6 +3596,8 @@ export default function App() {
               {view === 'analytics' && <AnalyticsView portfolio={portfolio} cash={cash} />}
               {view === 'news' && <NewsView portfolio={portfolio} />}
               {view === 'activity' && <ActivityView transactions={transactions} />}
+              {view === 'tips' && <TradingTipsView portfolio={portfolio} />}
+              {view === 'predict' && <PredictionView portfolio={portfolio} />}
               {view === 'settings' && (
                 <SettingsView
                   apiKey={apiKey} setApiKey={setApiKey}
