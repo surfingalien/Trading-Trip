@@ -12,7 +12,7 @@ import {
   AlertCircle, AlertTriangle, Info, CheckCircle2, Home,
   Settings, RefreshCw, Wifi, Key,
   Calculator, PiggyBank, Calendar, Lightbulb, ShieldAlert,
-  Wallet, BookOpen
+  Wallet, BookOpen, Menu
 } from 'lucide-react';
 
 /* ============================================================
@@ -86,6 +86,17 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 
 .no-tap { -webkit-tap-highlight-color: transparent; }
 .tooltip-card { background: var(--surface-2); border: 1px solid var(--border-light); border-radius: 8px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+.sidebar { width: 280px; flex-shrink: 0; }
+.main { flex: 1; min-width: 0; }
+
+@media (max-width: 768px) {
+  .sidebar { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 50; transition: left 0.3s ease; }
+  .sidebar.open { left: 0; }
+  .main { margin-left: 0; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: none; }
+  .overlay.open { display: block; }
+}
 `;
 
 const C = {
@@ -278,7 +289,7 @@ function usePriceState(holdings, watchlist) {
   });
 
   const [prices, setPrices] = useState(initialPrices);
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('finsight-api-key') || '');
   const [apiStatus, setApiStatus] = useState('cached');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -1095,10 +1106,14 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
   );
 };
 
-const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, apiStatus, hasApiKey, onSettings }) => (
+const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, apiStatus, hasApiKey, onSettings, onToggleSidebar }) => (
   <header className="h-16 px-8 flex items-center justify-between border-b shrink-0"
     style={{ background: C.ink, borderColor: C.border }}>
     <div className="flex items-center gap-4">
+      <button onClick={onToggleSidebar} className="md:hidden p-2 rounded-lg no-tap"
+        style={{ color: C.textDim }}>
+        <Menu size={20} />
+      </button>
       <button className="flex items-center gap-3 w-80 px-4 py-2 rounded-lg text-sm border transition-all no-tap"
         style={{ background: C.surface, borderColor: C.border, color: C.textFaint }}>
         <Search size={15} strokeWidth={1.8} />
@@ -2310,11 +2325,14 @@ const SettingsView = ({ apiKey, setApiKey, apiStatus, errorMsg, demoMode, setDem
   };
 
   const handleSave = () => {
-    setApiKey(keyInput.trim());
+    const trimmed = keyInput.trim();
+    localStorage.setItem('finsight-api-key', trimmed);
+    setApiKey(trimmed);
     setTestResult(null);
   };
 
   const handleDisconnect = () => {
+    localStorage.removeItem('finsight-api-key');
     setApiKey('');
     setKeyInput('');
     setTestResult(null);
@@ -2746,6 +2764,7 @@ const TransactionModal = ({ open, prefilledSymbol, prefilledType, prices, holdin
    ============================================================ */
 export default function App() {
   const [view, setView] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [holdings, setHoldings] = useState(INITIAL_HOLDINGS);
   const [cash, setCash] = useState(INITIAL_CASH);
   const [watchlist, setWatchlist] = useState(INITIAL_WATCHLIST);
@@ -2824,11 +2843,14 @@ export default function App() {
   return (
     <>
       <style>{THEME_CSS}</style>
+      {sidebarOpen && <div className="overlay open" onClick={() => setSidebarOpen(false)} />}
       <div className="flex h-screen overflow-hidden" style={{ background: C.ink }}>
-        <Sidebar active={view} setActive={setView}
-          apiStatus={apiStatus} lastUpdated={lastUpdated} errorMsg={errorMsg} />
+        <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+          <Sidebar active={view} setActive={setView}
+            apiStatus={apiStatus} lastUpdated={lastUpdated} errorMsg={errorMsg} />
+        </div>
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="main flex-1 flex flex-col min-w-0">
           <TopBar
             portfolioValue={portfolio.value}
             dayChange={portfolio.dayChange}
@@ -2838,6 +2860,7 @@ export default function App() {
             apiStatus={apiStatus}
             hasApiKey={!!apiKey}
             onSettings={() => setView('settings')}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />
 
           <main className="flex-1 overflow-y-auto px-8 py-8">

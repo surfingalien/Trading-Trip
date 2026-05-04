@@ -37,15 +37,22 @@ from tradingview_mcp.core.services.news_service import fetch_news_summary
 
 app = FastAPI(title="Trading Analysis API", version="1.0.0")
 
+# Build CORS allowed origins from env var + defaults
+_allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://surfingalien.github.io",
+]
+_env_origins = os.getenv("FINSIGHT_ALLOWED_ORIGINS", "").split(",")
+_allowed_origins.extend([o.strip() for o in _env_origins if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://surfingalien.github.io",
-    ],
-    allow_methods=["*"],
+    allow_origins=_allowed_origins,
+    allow_origin_regex=r"^https://([a-z0-9-]+\.)*vercel\.app$",
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 

@@ -251,3 +251,4 @@ frontend/.env.production.local
 # Build artifacts
 dist/
 *.egg-info/
+node_modules
