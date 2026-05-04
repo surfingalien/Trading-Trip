@@ -5,11 +5,17 @@ services:
     runtime: python
     region: oregon
     plan: free
-    buildCommand: python -m pip install -e . && python -m pip install -r requirements.txt
+    # Install runtime deps from requirements.txt first, then install this
+    # package itself in editable mode. We do NOT list tradingview-mcp-server
+    # in requirements.txt anymore — it would otherwise overwrite the editable
+    # install with the published wheel.
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements.txt && python -m pip install -e .
     startCommand: uvicorn api.server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: "3.10.0"
+        # 3.10.0 is the very first 3.10 release and has known CVEs. Use a
+        # current patch release. Bump to 3.12 when you're ready.
+        value: "3.11.10"
     healthCheckPath: /health
 
   # ── WebSocket Price Broadcast ──────────────────────────────────────────────
@@ -18,8 +24,9 @@ services:
     runtime: python
     region: oregon
     plan: free
-    buildCommand: python -m pip install -e . && python -m pip install -r requirements.txt
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements.txt && python -m pip install -e .
     startCommand: uvicorn api.ws_server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: "3.10.0"
+        value: "3.11.10"
+    healthCheckPath: /health

@@ -252,3 +252,4 @@ frontend/.env.production.local
 dist/
 *.egg-info/
 node_modules
+!backend/tests/test_*.py

@@ -1,9 +1,17 @@
-fastapi>=0.100.0
-uvicorn[standard]>=0.24.0
-tradingview-mcp-server>=0.7.1
-tradingview-screener>=0.6.4
-tradingview-ta>=3.3.0
-feedparser>=6.0.12
-yfinance>=0.2.0
-praw>=7.0.0
-websockets>=12.0
+# Pinned with upper bounds so a major release of any dependency doesn't
+# silently break deploys. Adjust the upper bounds when you're ready to
+# validate against a new major.
+#
+# NOTE: tradingview-mcp-server is intentionally NOT listed here. It is
+# this repo, and `pip install -e .` (run from render.yaml / Dockerfile)
+# installs it. Listing the published package here would overwrite the
+# editable install with the wheel from PyPI.
+
+fastapi>=0.100.0,<1.0.0
+uvicorn[standard]>=0.24.0,<1.0.0
+tradingview-screener>=0.6.4,<1.0.0
+tradingview-ta>=3.3.0,<4.0.0
+feedparser>=6.0.12,<7.0.0
+yfinance>=0.2.0,<1.0.0
+praw>=7.0.0,<8.0.0
+websockets>=12.0,<14.0

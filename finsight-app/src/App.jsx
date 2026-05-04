@@ -2769,7 +2769,7 @@ const TransactionModal = ({ open, prefilledSymbol, prefilledType, prices, holdin
 /* ============================================================
    BACKEND API CONFIG
    ============================================================ */
-const API_BASE = import.meta.env.VITE_API_URL || 'https://finsight-api.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://trading-trip-api.onrender.com';
 
 async function apiFetch(path, opts = {}) {
   const r = await fetch(`${API_BASE}${path}`, {
