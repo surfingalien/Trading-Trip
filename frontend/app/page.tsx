@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, RefreshCw,
   BarChart2, Lightbulb, Activity, Globe, AlertTriangle,
   Bell, BellOff, Zap, Target, Shield, Cpu, Brain,
-  Bitcoin, Search, Layers, X, Coins,
+  Bitcoin, Search, Layers, X, Coins, Waves,
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -133,7 +133,7 @@ export default function TradingDashboard() {
     const res: typeof backtests = {};
     await Promise.all(syms.map(async sym => {
       try {
-        const r = await fetch(`${API_BASE}/api/backtest/${sym}?strategy=rsi&period=1y`);
+        const r = await fetch(`${API_BASE}/api/backtest/${sym}?strategy=rsi&period=1y`, { signal: AbortSignal.timeout(5000) });
         if (r.ok) res[sym] = await r.json();
       } catch { /* skip */ }
     }));
@@ -143,7 +143,7 @@ export default function TradingDashboard() {
 
   // ── Snapshot ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch(`${API_BASE}/api/snapshot`).then(r => r.ok ? r.json() : null).then(d => d && setSnapshot(d));
+    fetch(`${API_BASE}/api/snapshot`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() : null).then(d => d && setSnapshot(d)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -154,7 +154,7 @@ export default function TradingDashboard() {
   useEffect(() => {
     const fetchPrices = async (symbols: string[], setter: (m: Record<string, { price: number; change_pct: number }>) => void) => {
       try {
-        const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`);
+        const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return;
         const data: Array<{ symbol: string; price: number; change_pct: number; error?: string }> = await res.json();
         const map: Record<string, { price: number; change_pct: number }> = {};
@@ -196,7 +196,7 @@ export default function TradingDashboard() {
     if (tab !== 'crypto') return;
     const interval = window.setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/price/BTC-USD`);
+        const res = await fetch(`${API_BASE}/api/price/BTC-USD`, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return;
         const data: { symbol: string; price: number; change_pct: number } = await res.json();
         setCryptoOverview(prev => prev ? { ...prev, btc_price: data } : { btc_price: data });
@@ -295,9 +295,9 @@ export default function TradingDashboard() {
       <header className="border-b border-gray-800 px-6 py-3 sticky top-0 z-30 sticky top-0 z-50 bg-gray-950/70 backdrop-blur-2xl shadow-sm border-b border-transparent [border-image:linear-gradient(to_right,transparent,rgba(52,211,153,0.25),rgba(34,211,238,0.2),transparent)_1]">
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <BarChart2 className="h-6 w-6 text-emerald-400 flex-shrink-0" />
+            <Waves className="h-6 w-6 text-emerald-400 flex-shrink-0" />
             <div>
-              <h1 className="text-xl font-extrabold leading-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">Trading Analysis Dashboard</h1>
+              <h1 className="text-xl font-extrabold leading-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">FinSurfing</h1>
               <p className="text-xs text-gray-500">{PORTFOLIO.positions.length} positions · {PORTFOLIO.asOf}</p>
             </div>
           </div>
