@@ -180,7 +180,24 @@ const INITIAL_HOLDINGS = [
 
 const INITIAL_CASH = { symbol: 'SPAXX', label: 'Money Market (SPAXX)', value: 5049.55, apy: 4.27 };
 
-const INITIAL_WATCHLIST = ['LRCX', 'AMAT', 'KO', 'JNJ', 'V', 'COST'];
+const INITIAL_WATCHLIST = [
+  // Technology
+  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'AMD',
+  // Semiconductors
+  'TSM', 'AVGO', 'QCOM', 'INTC', 'LRCX', 'AMAT',
+  // Consumer / E-commerce
+  'AMZN', 'COST', 'WMT', 'TGT', 'KO', 'PEP',
+  // Healthcare
+  'JNJ', 'UNH', 'PFE', 'ABBV',
+  // Financials
+  'JPM', 'BAC', 'V', 'MA', 'GS',
+  // Energy
+  'XOM', 'CVX',
+  // Industrials
+  'CAT', 'HON', 'BA',
+  // Utilities / REIT
+  'NEE', 'AMT',
+];
 
 const WATCHLIST_PRICES = {
   LRCX: { lastPrice: 1124.50, prevClose: 1118.20 },
@@ -1041,6 +1058,7 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
     { key: 'dashboard',       label: 'Dashboard',       icon: Home },
     { key: 'holdings',        label: 'Holdings',        icon: Briefcase },
     { key: 'watchlist',       label: 'Watchlist',       icon: Eye },
+    { key: 'search',          label: 'Stock Search',    icon: Search },
     { key: 'recommendations', label: 'Recommendations', icon: Lightbulb },
     { key: 'retirement',      label: 'Retirement',      icon: PiggyBank },
     { key: 'analytics',       label: 'Analytics',       icon: BarChart3 },
@@ -3155,6 +3173,12 @@ const TradingTipsView = ({ portfolio }) => {
     finally { setLoading(false); setWarmingUp(false); }
   }, [portfolioEquity]);
 
+  useEffect(() => {
+    const handler = e => { const s = e.detail?.symbol; if (s) { setSymbol(s); fetchTip(s); } };
+    window.addEventListener('finsight:prefill', handler);
+    return () => window.removeEventListener('finsight:prefill', handler);
+  }, [fetchTip]);
+
   const signalColors = {
     buy_setup: C.pos, neutral: C.gold, no_signal: C.textDim, sell_setup: C.neg,
   };
@@ -3429,6 +3453,12 @@ const PredictionView = ({ portfolio }) => {
     finally { setLoading(false); setWarmingUp(false); }
   }, []);
 
+  useEffect(() => {
+    const handler = e => { const s = e.detail?.symbol; if (s) { setSymbol(s); fetchPrediction(s, horizon); } };
+    window.addEventListener('finsight:prefill', handler);
+    return () => window.removeEventListener('finsight:prefill', handler);
+  }, [fetchPrediction, horizon]);
+
   const horizonLabels = { 7: '7-Day', 30: '30-Day', 90: '90-Day' };
   const probColors = p => p >= 0.6 ? C.pos : p >= 0.4 ? C.gold : C.neg;
 
@@ -3630,6 +3660,226 @@ const PredictionView = ({ portfolio }) => {
 };
 
 /* ============================================================
+   STOCK SEARCH VIEW
+   ============================================================ */
+const StockSearchView = ({ onAddToWatchlist, onAddToPortfolio, watchlist }) => {
+  const [selected, setSelected] = useState(null);
+  const [quote, setQuote] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
+  const [error, setError] = useState(null);
+
+  const loadStock = useCallback(async (item) => {
+    setSelected(item);
+    setQuote(null); setHistory([]); setError(null); setWarmingUp(false);
+    setLoadingQuote(true);
+    try {
+      const [q, h] = await Promise.all([
+        apiFetch(`/api/quotes?symbols=${item.symbol}`, {}, { onWarmup: () => setWarmingUp(true) }),
+        apiFetch(`/api/history/${item.symbol}?period=1mo`, {}, { onWarmup: () => {} }).catch(() => ({ bars: [] })),
+      ]);
+      // quotes returns an array
+      setQuote(Array.isArray(q) ? q.find(x => x.symbol === item.symbol) ?? q[0] ?? null : q);
+      setHistory(h?.bars || []);
+    } catch (e) {
+      setError(e.isWarmup ? 'Server waking up — please try again in a moment.' : e.message);
+    } finally { setLoadingQuote(false); setWarmingUp(false); }
+  }, []);
+
+  const inWatchlist = watchlist.includes(selected?.symbol);
+
+  const chartMin = history.length ? Math.min(...history.map(d => d.close ?? d.c ?? 0)) * 0.995 : 0;
+  const chartMax = history.length ? Math.max(...history.map(d => d.close ?? d.c ?? 0)) * 1.005 : 0;
+  const chartData = history.map(d => ({ date: d.date || d.t, price: d.close ?? d.c }));
+  const priceChange = quote ? (quote.change ?? 0) : 0;
+  const changePct = quote ? (quote.change_pct ?? 0) : 0;
+  const isUp = priceChange >= 0;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center gap-3">
+        <Search size={20} style={{ color: C.gold }} />
+        <div>
+          <h2 className="text-xl font-semibold font-serif" style={{ color: C.text }}>Stock Search</h2>
+          <p className="text-xs" style={{ color: C.textDim }}>Search any symbol or company name — add to watchlist or portfolio</p>
+        </div>
+      </div>
+
+      <SearchBar onSelect={loadStock} />
+
+      {/* Sector quick-browse */}
+      {!selected && (
+        <div className="space-y-4">
+          <p className="text-sm font-medium" style={{ color: C.textDim }}>Browse by sector</p>
+          {[
+            { sector: 'Technology',    symbols: ['AAPL','MSFT','NVDA','GOOGL','META','AMD','ORCL'] },
+            { sector: 'Semiconductors',symbols: ['TSM','AVGO','QCOM','INTC','LRCX','AMAT','TXN'] },
+            { sector: 'Consumer',      symbols: ['AMZN','COST','WMT','TGT','KO','PEP','BABA'] },
+            { sector: 'Healthcare',    symbols: ['JNJ','UNH','PFE','ABBV','MRK','TMO'] },
+            { sector: 'Financials',    symbols: ['JPM','BAC','V','MA','GS','MS','BRK-B'] },
+            { sector: 'Energy',        symbols: ['XOM','CVX','CL','OXY','SLB'] },
+            { sector: 'Industrials',   symbols: ['CAT','HON','BA','GE','MMM','UPS'] },
+            { sector: 'Utilities/REIT',symbols: ['NEE','AMT','PLD','DUK','SO'] },
+            { sector: 'Crypto ETFs',   symbols: ['COIN','MSTR','IBIT','ARKK','SOUN'] },
+          ].map(({ sector, symbols }) => (
+            <div key={sector}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.textFaint }}>{sector}</p>
+              <div className="flex flex-wrap gap-2">
+                {symbols.map(sym => (
+                  <button key={sym} onClick={() => loadStock({ symbol: sym, name: sym, exchange: '', sector })}
+                    className="text-xs px-3 py-1.5 rounded-full border transition-colors font-mono"
+                    style={{ borderColor: C.border, color: C.textDim }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.color = C.gold; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}>
+                    {sym}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Selected stock detail */}
+      {selected && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-mono text-2xl font-bold" style={{ color: C.gold }}>{selected.symbol}</span>
+              <span className="ml-3 text-sm" style={{ color: C.textDim }}>{selected.name}</span>
+            </div>
+            <button onClick={() => { setSelected(null); setQuote(null); setHistory([]); }}
+              className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: C.border, color: C.textDim }}>
+              ← Back
+            </button>
+          </div>
+
+          {warmingUp && (
+            <div className="p-3 rounded-lg border flex items-center gap-3" style={{ background: 'rgba(212,169,69,0.08)', borderColor: C.gold }}>
+              <RefreshCw size={14} className="spin shrink-0" style={{ color: C.gold }} />
+              <p className="text-sm" style={{ color: C.gold }}>Server waking up — auto-retrying…</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
+              <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+              <button onClick={() => loadStock(selected)} className="text-xs mt-1 underline" style={{ color: C.gold }}>Retry</button>
+            </div>
+          )}
+
+          {loadingQuote && !warmingUp && (
+            <div className="grid grid-cols-4 gap-4">
+              {[1,2,3,4].map(i => <div key={i} className="h-20 rounded-xl skeleton" />)}
+            </div>
+          )}
+
+          {quote && (
+            <>
+              {/* Price row */}
+              <div className="rounded-xl border p-5 flex items-start justify-between"
+                style={{ background: C.surface2, borderColor: C.border }}>
+                <div>
+                  <div className="text-3xl font-mono font-bold" style={{ color: C.text }}>
+                    {fmt.dollar(quote.price ?? quote.regularMarketPrice)}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {isUp ? <TrendingUp size={14} style={{ color: C.pos }} /> : <TrendingDown size={14} style={{ color: C.neg }} />}
+                    <span className="text-sm font-medium" style={{ color: isUp ? C.pos : C.neg }}>
+                      {fmt.pct(changePct)} ({fmt.dollar(Math.abs(priceChange))})
+                    </span>
+                    <span className="text-xs" style={{ color: C.textFaint }}>today</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => { onAddToWatchlist(selected.symbol); }}
+                    disabled={inWatchlist}
+                    className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors"
+                    style={{ borderColor: inWatchlist ? C.textFaint : C.gold, color: inWatchlist ? C.textFaint : C.gold }}>
+                    {inWatchlist ? '✓ In Watchlist' : '+ Watchlist'}
+                  </button>
+                  <button
+                    onClick={() => onAddToPortfolio(selected.symbol)}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                    style={{ background: C.gold, color: C.ink }}>
+                    + Portfolio
+                  </button>
+                </div>
+              </div>
+
+              {/* Key stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Price',     val: fmt.dollar(quote.price) },
+                  { label: 'Change',    val: `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%` },
+                  { label: 'Volume',    val: fmt.big$(quote.volume)?.replace('$', '') },
+                  { label: 'Mkt Cap',   val: fmt.big$(quote.market_cap) },
+                  { label: '52W High',  val: fmt.dollar(quote.fifty_two_week_high) },
+                  { label: '52W Low',   val: fmt.dollar(quote.fifty_two_week_low) },
+                  { label: 'Sector',    val: selected.sector || '—' },
+                  { label: 'Exchange',  val: selected.exchange || '—' },
+                ].map(({ label, val }) => (
+                  <div key={label} className="rounded-lg border p-3" style={{ background: C.surface2, borderColor: C.border }}>
+                    <div className="text-xs mb-1" style={{ color: C.textDim }}>{label}</div>
+                    <div className="font-mono text-sm font-semibold" style={{ color: C.text }}>{val ?? '—'}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mini chart */}
+              {chartData.length > 0 && (
+                <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                  <p className="text-xs font-medium mb-3" style={{ color: C.textDim }}>30-Day Price</p>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id="ssvGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={isUp ? C.pos : C.neg} stopOpacity={0.3} />
+                          <stop offset="100%" stopColor={isUp ? C.pos : C.neg} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" hide />
+                      <YAxis domain={[chartMin, chartMax]} hide />
+                      <Tooltip
+                        contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}
+                        labelStyle={{ color: C.textDim, fontSize: 11 }}
+                        formatter={v => [fmt.dollar(v), 'Price']}
+                      />
+                      <Area type="monotone" dataKey="price" stroke={isUp ? C.pos : C.neg}
+                        strokeWidth={2} fill="url(#ssvGrad)" dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Navigate to analysis */}
+              <div className="flex gap-3">
+                <a href="#" onClick={e => { e.preventDefault(); window.__finsightSetView?.('tips', selected.symbol); }}
+                  className="flex-1 rounded-lg border p-3 text-center text-sm font-medium transition-colors"
+                  style={{ borderColor: C.border, color: C.textDim }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.color = C.gold; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}>
+                  Trading Tips →
+                </a>
+                <a href="#" onClick={e => { e.preventDefault(); window.__finsightSetView?.('predict', selected.symbol); }}
+                  className="flex-1 rounded-lg border p-3 text-center text-sm font-medium transition-colors"
+                  style={{ borderColor: C.border, color: C.textDim }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.color = C.gold; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}>
+                  ML Forecast →
+                </a>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
    MAIN APP
    ============================================================ */
 export default function App() {
@@ -3659,6 +3909,21 @@ export default function App() {
   const risk = useMemo(() => computeRiskMetrics(portfolio.positions, cash), [portfolio.positions, cash]);
   const recs = useMemo(() => generateRecommendations(portfolio, risk, sectorAlloc, retirementProfile, risk.cashRatio),
     [portfolio, risk, sectorAlloc, retirementProfile]);
+
+  // Silently wake the backend on mount so it's warm by the time the user needs it
+  useEffect(() => {
+    fetch(`${API_BASE}/health`).catch(() => {});
+  }, []);
+
+  // Bridge for StockSearchView to switch views with a pre-filled symbol
+  useEffect(() => {
+    window.__finsightSetView = (v, sym) => {
+      setView(v);
+      // Views pick up via URL state — use a tiny delay so the view mounts first
+      if (sym) setTimeout(() => window.dispatchEvent(new CustomEvent('finsight:prefill', { detail: { symbol: sym } })), 50);
+    };
+    return () => { delete window.__finsightSetView; };
+  }, []);
 
   const showNotification = (msg, tone = 'pos') => {
     setNotification({ msg, tone });
@@ -3703,6 +3968,12 @@ export default function App() {
 
   const handleAddToPortfolio = (symbol) => {
     setTransactionModal({ open: true, symbol, type: 'buy' });
+  };
+
+  const handleAddToWatchlist = (symbol) => {
+    if (watchlist.includes(symbol)) return;
+    setWatchlist(prev => [...prev, symbol]);
+    showNotification(`Added ${symbol} to watchlist`, 'pos');
   };
 
   const handleRemoveFromWatchlist = (symbol) => {
@@ -3751,6 +4022,12 @@ export default function App() {
                   onAddToPortfolio={handleAddToPortfolio}
                   onRemove={handleRemoveFromWatchlist}
                   flashes={flashes} />
+              )}
+              {view === 'search' && (
+                <StockSearchView
+                  watchlist={watchlist}
+                  onAddToWatchlist={handleAddToWatchlist}
+                  onAddToPortfolio={handleAddToPortfolio} />
               )}
               {view === 'recommendations' && <RecommendationsView recs={recs} />}
               {view === 'retirement' && (
