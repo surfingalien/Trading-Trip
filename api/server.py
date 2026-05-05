@@ -9,6 +9,8 @@ import os
 import glob
 import math
 import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
@@ -19,9 +21,10 @@ _uv_candidates = glob.glob(
 if _uv_candidates and _uv_candidates[0] not in sys.path:
     sys.path.insert(0, _uv_candidates[0])
 
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query, Path, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 try:
     import numpy as np
@@ -48,6 +51,27 @@ except ImportError:
 
 app = FastAPI(title="FinSight Trading API", version="2.0.0")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Global 30-second request timeout — returns 504 instead of hanging
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=30.0)
+        except asyncio.TimeoutError:
+            return Response("Request timed out", status_code=504)
+
+app.add_middleware(TimeoutMiddleware)
+
+# Shared thread pool for blocking yfinance calls (avoids spawning unlimited threads)
+_executor = ThreadPoolExecutor(max_workers=8)
+
+async def _yf_fetch(fn, timeout: float = 10.0):
+    """Run a blocking yfinance call in the thread pool with a hard timeout."""
+    loop = asyncio.get_event_loop()
+    try:
+        return await asyncio.wait_for(loop.run_in_executor(_executor, fn), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "yfinance data fetch timed out — please retry")
 
 _allowed_origins = [
     "http://localhost:3000",
@@ -317,32 +341,35 @@ def search(
 # ─── Routes: quotes / history ─────────────────────────────────────────────────
 
 @app.get("/api/quotes")
-def quotes(symbols: str = Query(..., description="Comma-separated symbols")):
+async def quotes(symbols: str = Query(..., description="Comma-separated symbols")):
     if not _YF_AVAILABLE:
         raise HTTPException(503, "yfinance not available")
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
-    out = []
-    for sym in syms:
+
+    async def fetch_one(sym: str) -> dict:
         try:
-            tk = yf.Ticker(sym)
-            info = tk.fast_info
-            out.append({
-                "symbol":         sym,
-                "price":          round(float(info.last_price or 0), 4),
-                "change":         round(float((info.last_price or 0) - (info.previous_close or 0)), 4),
-                "change_pct":     round(float(((info.last_price or 0) / (info.previous_close or 1) - 1) * 100), 2),
-                "volume":         int(info.three_month_average_volume or 0),
-                "market_cap":     float(info.market_cap or 0),
-                "fifty_two_week_high": float(info.fifty_two_week_high or 0),
-                "fifty_two_week_low":  float(info.fifty_two_week_low  or 0),
-            })
+            def _get():
+                tk = yf.Ticker(sym)
+                info = tk.fast_info
+                return {
+                    "symbol":              sym,
+                    "price":               round(float(info.last_price or 0), 4),
+                    "change":              round(float((info.last_price or 0) - (info.previous_close or 0)), 4),
+                    "change_pct":          round(float(((info.last_price or 0) / (info.previous_close or 1) - 1) * 100), 2),
+                    "volume":              int(info.three_month_average_volume or 0),
+                    "market_cap":          float(info.market_cap or 0),
+                    "fifty_two_week_high": float(info.fifty_two_week_high or 0),
+                    "fifty_two_week_low":  float(info.fifty_two_week_low  or 0),
+                }
+            return await _yf_fetch(_get, timeout=10.0)
         except Exception as exc:
-            out.append({"symbol": sym, "error": str(exc)})
-    return out
+            return {"symbol": sym, "error": str(exc)}
+
+    return await asyncio.gather(*[fetch_one(s) for s in syms])
 
 
 @app.get("/api/history/{symbol}")
-def history(
+async def history(
     symbol: str = Path(...),
     period: str = Query("6mo", description="1mo|3mo|6mo|1y|2y|5y"),
     interval: str = Query("1d"),
@@ -350,7 +377,7 @@ def history(
     if not _YF_AVAILABLE:
         raise HTTPException(503, "yfinance not available")
     try:
-        df = _fetch_ohlcv(symbol.upper(), period)
+        df = await _yf_fetch(lambda: _fetch_ohlcv(symbol.upper(), period))
         rows = []
         for ts, row in df.iterrows():
             rows.append({
@@ -362,6 +389,8 @@ def history(
                 "volume": int(row.get("volume", 0)),
             })
         return {"symbol": symbol.upper(), "period": period, "bars": rows}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(400, str(exc))
 
@@ -369,7 +398,7 @@ def history(
 # ─── Routes: trading tips ─────────────────────────────────────────────────────
 
 @app.get("/api/tips/{symbol}")
-def trading_tips(
+async def trading_tips(
     symbol: str = Path(...),
     portfolio_equity: float = Query(100_000, ge=1_000),
 ):
@@ -377,7 +406,12 @@ def trading_tips(
         raise HTTPException(503, "yfinance not available")
     sym = symbol.upper()
     try:
-        df = _fetch_ohlcv(sym, "1y")
+        # Fetch symbol OHLCV and VIX in parallel
+        df, vix_df = await asyncio.gather(
+            _yf_fetch(lambda: _fetch_ohlcv(sym, "1y")),
+            _yf_fetch(lambda: yf.Ticker("^VIX").history(period="5d", auto_adjust=True), timeout=8.0),
+        )
+
         if len(df) < 60:
             raise ValueError("Insufficient history")
 
@@ -402,9 +436,8 @@ def trading_tips(
         vol_r  = _vol_ratio(volume, 20) if not volume.empty else 1.0
         price  = float(close.iloc[-1])
 
-        # VIX
+        # VIX from parallel result
         try:
-            vix_df = yf.Ticker("^VIX").history(period="5d", auto_adjust=True)
             vix = float(vix_df["Close"].iloc[-1]) if not vix_df.empty else 20.0
         except Exception:
             vix = 20.0
@@ -547,13 +580,15 @@ def trading_tips(
 # ─── Routes: market regime ────────────────────────────────────────────────────
 
 @app.get("/api/regime")
-def market_regime():
+async def market_regime():
     if not _YF_AVAILABLE:
         raise HTTPException(503, "yfinance not available")
     try:
-        spy_df  = yf.Ticker("SPY").history(period="1y",  auto_adjust=True)
-        vix_df  = yf.Ticker("^VIX").history(period="5d", auto_adjust=True)
-        qqq_df  = yf.Ticker("QQQ").history(period="1y",  auto_adjust=True)
+        spy_df, vix_df, qqq_df = await asyncio.gather(
+            _yf_fetch(lambda: yf.Ticker("SPY").history(period="1y",  auto_adjust=True)),
+            _yf_fetch(lambda: yf.Ticker("^VIX").history(period="5d", auto_adjust=True), timeout=8.0),
+            _yf_fetch(lambda: yf.Ticker("QQQ").history(period="1y",  auto_adjust=True)),
+        )
 
         spy_close = spy_df["Close"]
         spy_price = float(spy_close.iloc[-1])
@@ -678,7 +713,7 @@ def market_regime():
 # ─── Routes: ML price prediction (statistical) ────────────────────────────────
 
 @app.get("/api/predict")
-def predict(
+async def predict(
     symbol: str = Query(..., min_length=1, max_length=20),
     horizon: int = Query(7, ge=1, le=90),
 ):
@@ -686,7 +721,7 @@ def predict(
         raise HTTPException(503, "yfinance not available")
     sym = symbol.upper()
     try:
-        df = _fetch_ohlcv(sym, "2y")
+        df = await _yf_fetch(lambda: _fetch_ohlcv(sym, "2y"))
         if len(df) < 60:
             raise ValueError("Insufficient history for prediction")
 
