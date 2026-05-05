@@ -2772,10 +2772,11 @@ const TransactionModal = ({ open, prefilledSymbol, prefilledType, prices, holdin
 const API_BASE = import.meta.env.VITE_API_URL || 'https://trading-trip-api.onrender.com';
 
 async function apiFetch(path, opts = {}) {
-  const r = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  });
+  const method = (opts.method || 'GET').toUpperCase();
+  const headers = method === 'GET' || method === 'HEAD'
+    ? { ...opts.headers }
+    : { 'Content-Type': 'application/json', ...opts.headers };
+  const r = await fetch(`${API_BASE}${path}`, { headers, ...opts });
   if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
   return r.json();
 }
