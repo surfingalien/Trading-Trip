@@ -43,11 +43,9 @@ def rsi(series: pd.Series, n: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(n).mean()
     loss = (-delta.clip(upper=0)).rolling(n).mean()
-    rs     = gain / loss.replace(0, np.nan)
-    result = 100 - 100 / (1 + rs)
-    # Pure uptrend: loss == 0 after window fills → RSI should be 100
-    result = result.where(~((loss == 0) & gain.notna()), other=100.0)
-    return result
+    # Dividing by zero when loss==0: pandas returns inf → 100/(1+inf)=0 → RSI=100 ✓
+    rs = gain / loss
+    return 100 - 100 / (1 + rs)
 
 
 def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
