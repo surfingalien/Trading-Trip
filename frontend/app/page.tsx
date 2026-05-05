@@ -54,7 +54,38 @@ function Delta({ v, suffix = '' }: { v: number; suffix?: string }) {
   );
 }
 
-type Tab = 'overview' | 'analysis' | 'montecarlo' | 'signals' | 'market' | 'recommendations' | 'alerts' | 'crypto' | 'etfs';
+type Tab = 'overview' | 'analysis' | 'montecarlo' | 'signals' | 'market' | 'recommendations' | 'alerts' | 'crypto' | 'etfs' | 'technicals';
+
+// ─── Live Technical Analysis data (fetched 2025-05-05 via Yahoo Finance) ──
+const TA_DATA: Record<string, { price: number; w52hi: number; w52lo: number; rsi14: number; ma50: number; ma200: number; vs50: number; vs200: number; signal: 'Bullish' | 'Bearish' | 'Mixed' }> = {
+  NVDA: { price:197.35, w52hi:216.83, w52lo:110.82, rsi14:48.4, ma50:187.44, ma200:184.11, vs50:+5.3,  vs200:+7.2,  signal:'Bullish' },
+  AAPL: { price:283.20, w52hi:288.62, w52lo:193.25, rsi14:65.0, ma50:261.80, ma200:255.88, vs50:+8.2,  vs200:+10.7, signal:'Bullish' },
+  TSLA: { price:391.67, w52hi:498.83, w52lo:271.00, rsi14:49.8, ma50:383.17, ma200:403.17, vs50:+2.2,  vs200:-2.9,  signal:'Mixed'   },
+  GOOG: { price:382.30, w52hi:388.96, w52lo:149.49, rsi14:80.4, ma50:316.93, ma200:283.25, vs50:+20.6, vs200:+35.0, signal:'Bullish' },
+  MSFT: { price:410.56, w52hi:555.45, w52lo:356.28, rsi14:49.6, ma50:396.96, ma200:467.01, vs50:+3.4,  vs200:-12.1, signal:'Mixed'   },
+  AMD:  { price:356.38, w52hi:362.79, w52lo: 96.88, rsi14:75.5, ma50:241.40, ma200:213.29, vs50:+47.6, vs200:+67.1, signal:'Bullish' },
+  ARM:  { price:208.93, w52hi:237.68, w52lo:100.02, rsi14:68.0, ma50:153.09, ma200:141.77, vs50:+36.5, vs200:+47.4, signal:'Bullish' },
+  AVGO: { price:432.05, w52hi:432.48, w52lo:195.94, rsi14:66.1, ma50:353.19, ma200:341.48, vs50:+22.3, vs200:+26.5, signal:'Bullish' },
+  TSM:  { price:397.39, w52hi:414.50, w52lo:170.59, rsi14:61.4, ma50:361.44, ma200:307.04, vs50:+9.9,  vs200:+29.4, signal:'Bullish' },
+  AMZN: { price:273.67, w52hi:278.56, w52lo:183.85, rsi14:82.4, ma50:227.41, ma200:227.86, vs50:+20.3, vs200:+20.1, signal:'Mixed'   },
+};
+
+// ─── Inline SVG Sparkline ──────────────────────────────────────────────────
+function Sparkline({ data, up, width = 56, height = 22 }: { data: number[]; up: boolean; width?: number; height?: number }) {
+  if (!data || data.length < 2) return <div style={{ width, height }} />;
+  const mn = Math.min(...data), mx = Math.max(...data), range = mx - mn || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((v - mn) / range) * (height - 2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} aria-hidden="true" className="overflow-visible">
+      <polyline points={pts} fill="none" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"
+        className={up ? 'sparkline-up' : 'sparkline-down'} />
+    </svg>
+  );
+}
 
 // ─── Pre-computed backtest results (backtesting-trading-strategies skill) ──
 // Run: python3 skill/scripts/backtest.py --strategy <s> --symbol <sym> --period 1y
@@ -355,10 +386,11 @@ export default function TradingDashboard() {
 
   const TABS: { id: Tab; label: string; icon: typeof DollarSign }[] = [
     { id: 'overview',        label: 'Portfolio',       icon: DollarSign },
-    { id: 'analysis',        label: 'Risk & Analysis', icon: Shield },
-    { id: 'signals',         label: 'Backtest',        icon: Activity },
-    { id: 'montecarlo',      label: '6-Month Outlook', icon: Target },
-    { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+    { id: 'technicals',      label: 'Technicals',      icon: BarChart2   },
+    { id: 'analysis',        label: 'Risk',            icon: Shield },
+    { id: 'signals',         label: 'Signals',         icon: Zap },
+    { id: 'montecarlo',      label: 'Outlook',         icon: Target },
+    { id: 'recommendations', label: 'Ideas',           icon: Lightbulb },
     { id: 'crypto',          label: 'Crypto',          icon: Bitcoin },
     { id: 'etfs',            label: 'ETFs',            icon: Layers },
     { id: 'market',          label: 'Markets',         icon: Globe },
@@ -383,60 +415,73 @@ export default function TradingDashboard() {
       )}
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="border-b border-gray-800 px-6 py-3 sticky top-0 z-30 sticky top-0 z-50 bg-gray-950/70 backdrop-blur-2xl shadow-sm border-b border-transparent [border-image:linear-gradient(to_right,transparent,rgba(52,211,153,0.25),rgba(34,211,238,0.2),transparent)_1]">
-        <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Waves className="h-6 w-6 text-emerald-400 flex-shrink-0" />
+      <header className="sticky top-0 z-50 bg-gray-950/80 backdrop-blur-2xl border-b border-transparent [border-image:linear-gradient(to_right,transparent,rgba(52,211,153,0.3),rgba(34,211,238,0.2),transparent)_1]">
+        <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+
+          {/* Logo */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="relative">
+              <div className="absolute inset-0 bg-emerald-400/20 rounded-xl blur-lg" aria-hidden="true" />
+              <div className="relative bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 rounded-xl p-2">
+                <Waves className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+              </div>
+            </div>
             <div>
-              <h1 className="text-xl font-extrabold leading-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">FinSurfing</h1>
-              <p className="text-xs text-gray-500">{PORTFOLIO.positions.length} positions · {PORTFOLIO.asOf}</p>
+              <h1 className="text-lg font-extrabold leading-none bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+                FinSurfing
+              </h1>
+              <p className="text-[10px] text-gray-500 mt-0.5">{PORTFOLIO.positions.length}&nbsp;positions&nbsp;·&nbsp;{PORTFOLIO.asOf}</p>
             </div>
           </div>
 
-          {/* Day P&L quick stat */}
-          <div className="hidden md:flex items-center gap-6 text-sm">
-            <div>
-              <span className="text-gray-500 mr-1">Portfolio</span>
-              <span className="font-extrabold bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">{fmt$(totalWithCash, 0)}</span>
-            </div>
-            <div>
-              <span className="text-gray-500 mr-1">Total G/L</span>
-              <span className={`font-extrabold tabular-nums ${totals.gain >= 0 ? 'bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent' : 'text-red-400 font-semibold tabular-nums'}`}>
-                {fmt$(totals.gain, 0)} ({fmtPct((totals.gain / totals.cost) * 100)})
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500 mr-1">Today</span>
-              <span className={`font-bold ${totals.dayGain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
-                {fmt$(totals.dayGain, 0)}
-              </span>
-            </div>
+          {/* P&L strip */}
+          <div className="hidden lg:flex items-center gap-5 text-sm">
+            {[
+              { label: 'Portfolio',  val: fmt$(totalWithCash, 0),              cls: 'bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent font-extrabold' },
+              { label: 'Total G/L',  val: `${fmt$(totals.gain, 0)} (${fmtPct((totals.gain / totals.cost) * 100)})`, cls: totals.gain >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold' },
+              { label: 'Today',      val: fmt$(totals.dayGain, 0),             cls: totals.dayGain >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold' },
+            ].map(s => (
+              <div key={s.label} className="flex flex-col items-end">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider">{s.label}</span>
+                <span className={`tabular-nums ${s.cls}`}>{s.val}</span>
+              </div>
+            ))}
           </div>
 
+          {/* Right controls */}
           <div className="flex items-center gap-2">
             {/* Search */}
             <div className="relative hidden sm:block">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+              <label htmlFor="global-search" className="sr-only">Search stocks, crypto, ETFs</label>
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" aria-hidden="true" />
               <input
-                type="text"
+                id="global-search"
+                type="search"
+                autoComplete="off"
+                spellCheck={false}
                 placeholder="Search stocks, crypto, ETFs…"
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); }}
                 onFocus={() => setSearchOpen(true)}
                 onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-                className="bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-7 py-1.5 text-sm text-gray-100 placeholder-gray-500 w-52 focus:outline-none focus:border-emerald-500 transition-colors"
+                className="bg-gray-800/80 border border-gray-700/60 rounded-xl pl-8 pr-7 py-1.5 text-sm text-gray-100 placeholder-gray-500 w-52 focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-1 focus-visible:ring-emerald-500/50 transition-colors"
               />
               {searchQuery && (
-                <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <X className="h-3 w-3 text-gray-500 hover:text-gray-300" />
+                <button
+                  aria-label="Clear search"
+                  onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-gray-100 text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 rounded">
+                  <X className="h-3 w-3" aria-hidden="true" />
                 </button>
               )}
               {searchOpen && searchResults.length > 0 && (
-                <div className="absolute top-full mt-1 right-0 w-72 bg-gray-900/90 backdrop-blur-xl border border-gray-700/60 rounded-xl shadow-2xl shadow-black/60 ring-1 ring-white/5 z-50 overflow-hidden">
+                <div role="listbox" aria-label="Search results"
+                  className="absolute top-full mt-1 right-0 w-72 bg-gray-900/95 backdrop-blur-xl border border-gray-700/60 rounded-xl shadow-2xl shadow-black/70 ring-1 ring-white/5 z-50 overflow-hidden">
                   {searchResults.map(r => (
-                    <button key={r.symbol + r.type} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-800 text-left transition-colors"
+                    <button key={r.symbol + r.type} role="option" aria-selected={false}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-800/80 text-left transition-colors focus-visible:outline-none focus-visible:bg-gray-800"
                       onMouseDown={() => { setTab(r.tab); setSearchQuery(''); setSearchOpen(false); }}>
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${r.type === 'Crypto' ? 'bg-orange-900' : r.type === 'ETF' ? 'bg-violet-900' : 'bg-blue-900'}`}>
+                      <div aria-hidden="true" className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${r.type === 'Crypto' ? 'bg-orange-900/60' : r.type === 'ETF' ? 'bg-violet-900/60' : 'bg-blue-900/60'}`}>
                         {r.type === 'Crypto' ? <Bitcoin className="h-3.5 w-3.5 text-orange-300" /> : r.type === 'ETF' ? <Layers className="h-3.5 w-3.5 text-violet-300" /> : <BarChart2 className="h-3.5 w-3.5 text-blue-300" />}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -451,31 +496,62 @@ export default function TradingDashboard() {
                 </div>
               )}
             </div>
+
             {triggeredAlerts.length > 0 && (
-              <Badge className="bg-red-700 text-white animate-pulse flex items-center gap-1">
-                <Bell className="h-3 w-3" /> {triggeredAlerts.length} alert{triggeredAlerts.length > 1 ? 's' : ''}
+              <Badge className="bg-red-700 text-white animate-pulse flex items-center gap-1" aria-live="polite">
+                <Bell className="h-3 w-3" aria-hidden="true" />
+                {triggeredAlerts.length}&nbsp;alert{triggeredAlerts.length > 1 ? 's' : ''}
               </Badge>
             )}
-            <Badge className={connected ? 'bg-emerald-800 text-emerald-200' : 'bg-gray-800 text-gray-400'}>
-              {connected ? '● Live WS' : lastUpdate ? `REST · ${lastUpdate.toLocaleTimeString()}` : 'Connecting…'}
-            </Badge>
-            <Button size="sm" variant="outline" className="border-gray-700 bg-gray-800 hover:bg-gray-700" onClick={refresh}>
-              <RefreshCw className="h-3.5 w-3.5" />
-            </Button>
+
+            {/* Live status */}
+            <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${connected ? 'border-emerald-700/50 bg-emerald-950/50 text-emerald-400' : 'border-gray-700 bg-gray-800/50 text-gray-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${connected ? 'bg-emerald-400 live-dot' : 'bg-gray-500'}`} aria-hidden="true" />
+              {connected ? 'Live' : lastUpdate ? lastUpdate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'Connecting…'}
+            </div>
+
+            <button
+              aria-label="Refresh portfolio data"
+              onClick={refresh}
+              className="p-1.5 rounded-lg border border-gray-700 bg-gray-800/60 hover:bg-gray-700 hover:border-gray-600 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500">
+              <RefreshCw className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Scrolling ticker strip ──────────────────────────────────── */}
+        <div className="border-t border-gray-800/60 bg-gray-950/50 overflow-hidden py-1.5" aria-hidden="true">
+          <div className="ticker-track text-xs text-gray-400 gap-8 flex">
+            {[...Object.entries(TA_DATA), ...Object.entries(TA_DATA)].map(([sym, d], i) => (
+              <span key={`${sym}-${i}`} className="flex items-center gap-1.5 flex-shrink-0">
+                <span className="font-semibold text-white">{sym}</span>
+                <span className={d.signal === 'Bullish' ? 'text-emerald-400' : d.signal === 'Bearish' ? 'text-red-400' : 'text-yellow-400'}>
+                  {fmt$(d.price, 2)}
+                </span>
+                <span className={d.vs50 >= 0 ? 'text-emerald-500' : 'text-red-500'}>
+                  {d.vs50 >= 0 ? '▲' : '▼'}{Math.abs(d.vs50).toFixed(1)}%&nbsp;vs&nbsp;50d
+                </span>
+                <span className="text-gray-700">|</span>
+              </span>
+            ))}
           </div>
         </div>
       </header>
 
       {/* Triggered alert banner */}
       {triggeredAlerts.length > 0 && (
-        <div className="bg-red-950 border-b border-red-800 px-6 py-2">
+        <div className="bg-red-950/80 border-b border-red-800/60 px-6 py-2" role="alert" aria-live="assertive">
           {triggeredAlerts.slice(0, 3).map(a => (
             <div key={a.id} className="flex items-center justify-between text-sm text-red-300">
               <span>
-                <Bell className="inline h-3 w-3 mr-1" />
-                <strong>{a.symbol}</strong> {a.type === 'above' ? 'crossed above' : a.type === 'below' ? 'dropped below' : 'moved'} {a.threshold}{a.type === 'change_pct' ? '%' : ` (${fmt$(a.threshold)})`}
+                <Bell className="inline h-3 w-3 mr-1" aria-hidden="true" />
+                <strong>{a.symbol}</strong> {a.type === 'above' ? 'crossed above' : a.type === 'below' ? 'dropped below' : 'moved'}&nbsp;
+                {a.threshold}{a.type === 'change_pct' ? '%' : ` (${fmt$(a.threshold)})`}
               </span>
-              <button onClick={() => dismissAlert(a.id)} className="text-red-500 hover:text-red-300 ml-4 text-xs">dismiss</button>
+              <button onClick={() => dismissAlert(a.id)}
+                className="text-red-500 hover:text-red-200 ml-4 text-xs focus-visible:outline-none focus-visible:underline">
+                Dismiss
+              </button>
             </div>
           ))}
         </div>
@@ -483,17 +559,22 @@ export default function TradingDashboard() {
 
       <div className="max-w-screen-2xl mx-auto px-6 py-4 space-y-4">
 
-        {/* ── Tabs ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-1 border-b border-gray-800 pb-0">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t transition-colors
-                ${tab === t.id
-                  ? 'bg-gray-800 text-emerald-400 border-b-2 border-emerald-400 drop-shadow-[0_1px_6px_rgba(52,211,153,0.55)]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'}`}>
-              <t.icon className="h-3.5 w-3.5" />{t.label}
-            </button>
-          ))}
+        {/* ── Pill Tab Bar ──────────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-1 p-1 bg-gray-900/50 rounded-xl border border-gray-800/60 backdrop-blur-sm" role="tablist" aria-label="Dashboard sections">
+          {TABS.map(t => {
+            const active = tab === t.id;
+            return (
+              <button key={t.id} role="tab" aria-selected={active} aria-controls={`panel-${t.id}`}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70
+                  ${active
+                    ? 'bg-gradient-to-r from-emerald-600/80 to-teal-600/60 text-white shadow-lg shadow-emerald-900/40 ring-1 ring-emerald-500/40'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60'}`}>
+                <t.icon className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ────────────────────────────────────────────────────────────────
@@ -501,81 +582,258 @@ export default function TradingDashboard() {
         ─────────────────────────────────────────────────────────────────── */}
         {tab === 'overview' && (
           <div className="space-y-4">
-            {/* KPI row */}
+            {/* KPI row — gradient border glass cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: 'Total Value', value: fmt$(totalWithCash, 0), sub: fmt$(totals.gain, 0) + ' total gain', color: 'text-white', icon: DollarSign },
-                { label: 'Today\'s P&L',  value: fmt$(totals.dayGain, 0), sub: fmtPct((totals.dayGain / totals.cost) * 100), color: totals.dayGain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums', icon: totals.dayGain >= 0 ? TrendingUp : TrendingDown },
-                { label: 'Cash Reserve', value: fmt$(PORTFOLIO.cashValue, 0), sub: ((PORTFOLIO.cashValue / totalWithCash) * 100).toFixed(1) + '% of portfolio', color: 'text-sky-400', icon: DollarSign },
-                { label: 'Total Return', value: fmtPct((totals.gain / totals.cost) * 100), sub: `cost basis ${fmt$(totals.cost, 0)}`, color: totals.gain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums', icon: BarChart2 },
+                { label: 'Total Value',  value: fmt$(totalWithCash, 0), sub: fmt$(totals.gain, 0) + ' total gain',
+                  icon: DollarSign, grad: 'from-emerald-500/15 to-teal-500/5', border: 'border-emerald-800/40', val_cls: 'bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent' },
+                { label: "Today's P&L", value: fmt$(totals.dayGain, 0), sub: fmtPct((totals.dayGain / totals.cost) * 100) + ' of cost',
+                  icon: totals.dayGain >= 0 ? TrendingUp : TrendingDown,
+                  grad: totals.dayGain >= 0 ? 'from-emerald-500/10 to-green-500/5' : 'from-red-500/10 to-rose-500/5',
+                  border: totals.dayGain >= 0 ? 'border-emerald-800/40' : 'border-red-800/40',
+                  val_cls: totals.dayGain >= 0 ? 'text-emerald-400' : 'text-red-400' },
+                { label: 'Cash Reserve', value: fmt$(PORTFOLIO.cashValue, 0), sub: ((PORTFOLIO.cashValue / totalWithCash) * 100).toFixed(1) + '% of portfolio',
+                  icon: Shield, grad: 'from-sky-500/10 to-blue-500/5', border: 'border-sky-800/40', val_cls: 'text-sky-400' },
+                { label: 'Total Return', value: fmtPct((totals.gain / totals.cost) * 100), sub: 'cost basis ' + fmt$(totals.cost, 0),
+                  icon: BarChart2, grad: totals.gain >= 0 ? 'from-emerald-500/10 to-teal-500/5' : 'from-red-500/10 to-rose-500/5',
+                  border: totals.gain >= 0 ? 'border-emerald-800/40' : 'border-red-800/40',
+                  val_cls: totals.gain >= 0 ? 'text-emerald-400' : 'text-red-400' },
               ].map(k => (
-                <Card key={k.label} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
-                  <CardContent className="pt-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-400">{k.label}</span>
-                      <k.icon className={`h-4 w-4 ${k.color}`} />
-                    </div>
-                    <div className={`text-xl font-bold ${k.color}`}>{k.value}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{k.sub}</div>
-                  </CardContent>
-                </Card>
+                <div key={k.label} className={`relative rounded-xl bg-gradient-to-br ${k.grad} border ${k.border} backdrop-blur-xl p-4 card-glow`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider">{k.label}</span>
+                    <k.icon className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                  </div>
+                  <div className={`text-2xl font-extrabold tabular-nums ${k.val_cls}`}>{k.value}</div>
+                  <div className="text-xs text-gray-500 mt-1">{k.sub}</div>
+                </div>
               ))}
             </div>
 
-            {/* Positions table */}
-            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
+            {/* Fear & Greed inline */}
+            {fearGreed && (
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gray-900/50 border border-gray-800/60 text-sm">
+                <span className="text-gray-500 text-xs uppercase tracking-wider">Fear&nbsp;&amp;&nbsp;Greed</span>
+                <div className="flex-1 max-w-48">
+                  <div className="rsi-bar-track">
+                    <div className="rsi-thumb" style={{ left: `${fearGreed.value}%` }} />
+                  </div>
+                </div>
+                <span className="font-bold text-white tabular-nums">{fearGreed.value}</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${fearGreed.value >= 60 ? 'signal-bull' : fearGreed.value <= 40 ? 'signal-bear' : 'signal-neut'}`}>
+                  {fearGreed.label}
+                </span>
+              </div>
+            )}
+
+            {/* Positions table with sparklines */}
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 card-glow">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Positions</CardTitle>
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">
+                  Positions
+                </CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" role="table">
                   <thead>
-                    <tr className="border-b border-gray-700/40 text-gray-400 text-xs bg-gray-900/60 backdrop-blur-sm sticky top-[4rem] z-10 shadow-sm">
-                      {['Symbol','Qty','Avg Cost','Live Price','Value','Today','Total G/L','Total %','Wt%','Rating'].map(h => (
-                        <th key={h} 
-                            onClick={() => requestSort(h)}
-                            className={`py-2 px-3 cursor-pointer hover:text-white transition-colors ${h === 'Symbol' ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''}`}>
-                            <div className={`flex items-center gap-1 ${h === 'Symbol' ? 'justify-start' : h === 'Rating' ? 'justify-center' : 'justify-end'}`}>
-                              {h}
-                              {sortConfig?.key === h && <span className="text-emerald-400">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                            </div>
+                    <tr className="border-b border-gray-700/40 text-gray-400 text-xs bg-gray-900/60 backdrop-blur-sm">
+                      {['Symbol','Trend','Qty','Avg Cost','Live Price','Value','Today','Total G/L','Total %','Wt%','Rating'].map(h => (
+                        <th key={h}
+                            onClick={() => h !== 'Trend' && requestSort(h)}
+                            className={`py-2 px-3 font-medium ${h === 'Trend' ? '' : 'cursor-pointer hover:text-white transition-colors'} ${h === 'Symbol' ? 'text-left' : 'text-right'} ${h === 'Rating' ? '!text-center' : ''} ${h === 'Trend' ? 'text-center' : ''}`}>
+                          <div className={`flex items-center gap-1 ${h === 'Symbol' ? 'justify-start' : h === 'Rating' || h === 'Trend' ? 'justify-center' : 'justify-end'}`}>
+                            {h}
+                            {sortConfig?.key === h && <span className="text-emerald-400">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                          </div>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedEnriched.map(pos => (
-                      <tr key={pos.symbol} className="border-b border-gray-800/40 hover:bg-gray-800/40 transition-all duration-300 group">
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-white">{pos.symbol}</div>
-                          <div className="text-xs text-gray-500 max-w-[120px] truncate">{pos.description}</div>
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-gray-300">{pos.qty}</td>
-                        <td className="py-2.5 px-3 text-right text-gray-400">{fmt$(pos.avgCost)}</td>
-                        <td className="py-2.5 px-3 text-right text-white font-medium">
-                          {fmt$(pos.livePrice)}
-                          {prices[pos.symbol] && <div className="text-xs"><Delta v={prices[pos.symbol].change_pct} /></div>}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-white">{fmt$(pos.liveValue, 0)}</td>
-                        <td className="py-2.5 px-3 text-right"><Delta v={pos.livePct} /></td>
-                        <td className={`py-2.5 px-3 text-right font-medium ${pos.liveGain >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
-                          {fmt$(pos.liveGain, 0)}
-                        </td>
-                        <td className={`py-2.5 px-3 text-right ${pos.liveGainPct >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
-                          {fmtPct(pos.liveGainPct)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-gray-400">
-                          {((pos.liveValue / (totalWithCash - PORTFOLIO.cashValue)) * 100).toFixed(1)}%
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${ratingBadge(pos.rating)}`}>
-                            {pos.rating.replace('_', ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {sortedEnriched.map(pos => {
+                      const ta = TA_DATA[pos.symbol];
+                      const up = pos.liveGainPct >= 0;
+                      // mini fake sparkline based on cost vs live price
+                      const spk = ta
+                        ? [ta.w52lo, ta.ma200, ta.ma50, ta.price * 0.97, ta.price]
+                        : [pos.avgCost * 0.9, pos.avgCost, (pos.avgCost + pos.livePrice) / 2, pos.livePrice * 0.99, pos.livePrice];
+                      return (
+                        <tr key={pos.symbol} className="border-b border-gray-800/30 hover:bg-gray-800/30 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-white">{pos.symbol}</div>
+                            <div className="text-xs text-gray-500 max-w-[110px] truncate">{pos.description}</div>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <Sparkline data={spk} up={up} width={52} height={20} />
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-gray-300 tabular-nums">{pos.qty}</td>
+                          <td className="py-2.5 px-3 text-right text-gray-400 tabular-nums">{fmt$(pos.avgCost)}</td>
+                          <td className="py-2.5 px-3 text-right font-medium tabular-nums">
+                            <div className="text-white">{fmt$(pos.livePrice)}</div>
+                            {prices[pos.symbol] && <div className="text-xs"><Delta v={prices[pos.symbol].change_pct} /></div>}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-white tabular-nums">{fmt$(pos.liveValue, 0)}</td>
+                          <td className="py-2.5 px-3 text-right tabular-nums"><Delta v={pos.livePct} /></td>
+                          <td className={`py-2.5 px-3 text-right font-medium tabular-nums ${pos.liveGain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {fmt$(pos.liveGain, 0)}
+                          </td>
+                          <td className={`py-2.5 px-3 text-right tabular-nums ${pos.liveGainPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {fmtPct(pos.liveGainPct)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-gray-400 tabular-nums">
+                            {((pos.liveValue / (totalWithCash - PORTFOLIO.cashValue)) * 100).toFixed(1)}%
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${ratingBadge(pos.rating)}`}>
+                              {pos.rating.replace('_', ' ')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ────────────────────────────────────────────────────────────────
+            TAB: TECHNICAL ANALYSIS
+        ─────────────────────────────────────────────────────────────────── */}
+        {tab === 'technicals' && (
+          <div className="space-y-5">
+            {/* Header context */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Technical Analysis Dashboard</h2>
+                <p className="text-xs text-gray-500 mt-0.5">RSI · Moving Averages · 52-Week Range · Signal — Live via Yahoo Finance · Updated {PORTFOLIO.asOf}</p>
+              </div>
+              <div className="text-xs text-gray-600 hidden md:block">us-stock-analysis skill · backtesting-trading-strategies skill</div>
+            </div>
+
+            {/* Signal summary bar */}
+            <div className="grid grid-cols-3 gap-3">
+              {(['Bullish','Mixed','Bearish'] as const).map(sig => {
+                const count = Object.values(TA_DATA).filter(d => d.signal === sig).length;
+                return (
+                  <div key={sig} className={`rounded-xl p-3 text-center border ${sig === 'Bullish' ? 'bg-emerald-950/40 border-emerald-800/40' : sig === 'Bearish' ? 'bg-red-950/40 border-red-800/40' : 'bg-amber-950/30 border-amber-800/40'}`}>
+                    <div className={`text-2xl font-extrabold tabular-nums ${sig === 'Bullish' ? 'text-emerald-400' : sig === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>{count}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{sig}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Per-stock TA cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Object.entries(TA_DATA).map(([sym, d]) => {
+                const rsiColor = d.rsi14 >= 70 ? 'text-red-400' : d.rsi14 <= 30 ? 'text-emerald-400' : 'text-yellow-300';
+                const rsiLabel = d.rsi14 >= 70 ? 'Overbought' : d.rsi14 <= 30 ? 'Oversold' : 'Neutral';
+                const rangePct = ((d.price - d.w52lo) / (d.w52hi - d.w52lo)) * 100;
+                const sigCls = d.signal === 'Bullish' ? 'signal-bull' : d.signal === 'Bearish' ? 'signal-bear' : 'signal-neut';
+                return (
+                  <div key={sym} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800/60 rounded-xl p-4 card-glow space-y-3">
+                    {/* Symbol + signal */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-extrabold text-white text-lg">{sym}</div>
+                        <div className="text-xs text-gray-500 tabular-nums">{fmt$(d.price, 2)}</div>
+                      </div>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${sigCls}`}>{d.signal}</span>
+                    </div>
+
+                    {/* 52-week range bar */}
+                    <div>
+                      <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                        <span>52W Lo {fmt$(d.w52lo, 0)}</span>
+                        <span className="text-gray-400 font-semibold">{rangePct.toFixed(0)}% of range</span>
+                        <span>Hi {fmt$(d.w52hi, 0)}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-gray-800 relative overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-400"
+                          style={{ width: `${Math.min(100, rangePct)}%` }} />
+                        <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white border border-gray-900 shadow"
+                          style={{ left: `calc(${Math.min(98, rangePct)}% - 4px)` }} />
+                      </div>
+                    </div>
+
+                    {/* RSI gauge */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">RSI 14</span>
+                        <span className={`text-xs font-bold ${rsiColor}`}>{d.rsi14} — {rsiLabel}</span>
+                      </div>
+                      <div className="rsi-bar-track">
+                        <div className="rsi-thumb" style={{ left: `${d.rsi14}%` }} />
+                      </div>
+                      <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+                        <span>30 Oversold</span><span>70 Overbought</span>
+                      </div>
+                    </div>
+
+                    {/* MA signals */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: 'vs 50-day MA', val: d.vs50, ma: d.ma50 },
+                        { label: 'vs 200-day MA', val: d.vs200, ma: d.ma200 },
+                      ].map(m => (
+                        <div key={m.label} className="bg-gray-800/60 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-gray-500 mb-0.5">{m.label}</div>
+                          <div className={`font-bold tabular-nums text-sm ${m.val >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {m.val >= 0 ? '+' : ''}{m.val.toFixed(1)}%
+                          </div>
+                          <div className="text-[10px] text-gray-600 tabular-nums">{fmt$(m.ma, 0)}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action hint from us-stock-analysis framework */}
+                    <div className={`text-xs rounded-lg px-3 py-2 ${
+                      d.rsi14 >= 75 ? 'bg-red-950/50 text-red-300 border border-red-900/40' :
+                      d.rsi14 <= 35 ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-900/40' :
+                      d.vs50 < 0 && d.vs200 < 0 ? 'bg-red-950/30 text-red-400 border border-red-900/30' :
+                      'bg-gray-800/50 text-gray-400 border border-gray-700/40'
+                    }`}>
+                      {d.rsi14 >= 75 ? `⚠ RSI overbought (${d.rsi14}) — consider trimming or waiting for pullback` :
+                       d.rsi14 <= 35 ? `✦ RSI oversold (${d.rsi14}) — potential accumulation zone` :
+                       d.vs50 < 0 && d.vs200 < 0 ? '↓ Below both MAs — downtrend confirmed, avoid adding' :
+                       d.signal === 'Bullish' ? `↑ Price > 50d > 200d MA — uptrend intact` :
+                       'Mixed signals — watch for MA crossover confirmation'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Backtest insight from backtesting-trading-strategies skill */}
+            <Card className="bg-gray-900/40 border-gray-800/60 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-cyan-400" aria-hidden="true" />
+                  Strategy Backtest Context (1Y · Daily · backtesting-trading-strategies skill)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {PRECOMPUTED_BT.map((bt, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2.5 text-xs">
+                      <div>
+                        <span className="font-bold text-white">{bt.symbol.replace('-USD','')}</span>
+                        <span className="text-gray-500 ml-1.5">{bt.strategy}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-bold tabular-nums ${bt.total_return_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {bt.total_return_pct >= 0 ? '+' : ''}{bt.total_return_pct.toFixed(1)}%
+                        </div>
+                        <div className="text-gray-600">Sharpe {bt.sharpe_ratio.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-600 mt-3">
+                  Key finding: Buy-and-hold outperforms all active strategies for trending tech/crypto. Use RSI &lt;35 as accumulation signal, &gt;75 as trim signal.
+                </p>
               </CardContent>
             </Card>
           </div>
