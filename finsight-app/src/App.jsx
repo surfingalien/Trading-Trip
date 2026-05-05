@@ -2771,14 +2771,44 @@ const TransactionModal = ({ open, prefilledSymbol, prefilledType, prices, holdin
    ============================================================ */
 const API_BASE = import.meta.env.VITE_API_URL || 'https://trading-trip-api.onrender.com';
 
-async function apiFetch(path, opts = {}) {
-  const method = (opts.method || 'GET').toUpperCase();
-  const headers = method === 'GET' || method === 'HEAD'
-    ? { ...opts.headers }
-    : { 'Content-Type': 'application/json', ...opts.headers };
-  const r = await fetch(`${API_BASE}${path}`, { headers, ...opts });
-  if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
-  return r.json();
+class WarmupError extends Error {
+  constructor() { super('warming_up'); this.isWarmup = true; }
+}
+
+async function _doFetch(path, opts, timeoutMs) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const method = (opts.method || 'GET').toUpperCase();
+    const headers = method === 'GET' || method === 'HEAD'
+      ? { ...opts.headers }
+      : { 'Content-Type': 'application/json', ...opts.headers };
+    const r = await fetch(`${API_BASE}${path}`, { headers, signal: controller.signal, ...opts });
+    if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
+    return r.json();
+  } catch (e) {
+    // AbortError = timeout; TypeError = network failure (cold-start connection refused)
+    if (e.name === 'AbortError' || (e instanceof TypeError && !e.message.includes('API '))) {
+      throw new WarmupError();
+    }
+    throw e;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+async function apiFetch(path, opts = {}, { onWarmup } = {}) {
+  try {
+    return await _doFetch(path, opts, 30_000);
+  } catch (e) {
+    if (e.isWarmup) {
+      onWarmup?.();
+      // Server is cold-starting — wait 15s then retry with a longer window
+      await new Promise(res => setTimeout(res, 15_000));
+      return await _doFetch(path, opts, 60_000);
+    }
+    throw e;
+  }
 }
 
 /* ============================================================
@@ -3106,18 +3136,23 @@ const TradingTipsView = ({ portfolio }) => {
   const [symbol, setSymbol] = useState('');
   const [tip, setTip] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
 
   const portfolioEquity = portfolio?.value || 100_000;
 
   const fetchTip = useCallback(async (sym) => {
     if (!sym) return;
-    setLoading(true); setError(null); setTip(null);
+    setLoading(true); setError(null); setTip(null); setWarmingUp(false);
     try {
-      const data = await apiFetch(`/api/tips/${sym}?portfolio_equity=${portfolioEquity}`);
+      const data = await apiFetch(
+        `/api/tips/${sym}?portfolio_equity=${portfolioEquity}`,
+        {},
+        { onWarmup: () => setWarmingUp(true) }
+      );
       setTip(data);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+    } catch (e) { setError(e.isWarmup ? 'Server timed out waking up. Please try again.' : e.message); }
+    finally { setLoading(false); setWarmingUp(false); }
   }, [portfolioEquity]);
 
   const signalColors = {
@@ -3164,13 +3199,24 @@ const TradingTipsView = ({ portfolio }) => {
         </div>
       )}
 
-      {error && (
-        <div className="p-4 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
-          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+      {warmingUp && (
+        <div className="p-4 rounded-lg border flex items-center gap-3" style={{ background: 'rgba(212,169,69,0.08)', borderColor: C.gold }}>
+          <RefreshCw size={16} className="spin shrink-0" style={{ color: C.gold }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: C.gold }}>Server waking up (free tier)</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>Render free tier sleeps after inactivity. Auto-retrying — this takes up to 60 seconds on first load.</p>
+          </div>
         </div>
       )}
 
-      {loading && (
+      {error && (
+        <div className="p-4 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
+          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+          <button onClick={() => symbol && fetchTip(symbol)} className="text-xs mt-2 underline" style={{ color: C.gold }}>Try again</button>
+        </div>
+      )}
+
+      {loading && !warmingUp && (
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3].map(i => <div key={i} className="h-32 rounded-xl skeleton" />)}
         </div>
@@ -3366,16 +3412,21 @@ const PredictionView = ({ portfolio }) => {
   const [horizon, setHorizon] = useState(7);
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchPrediction = useCallback(async (sym, hor, refresh = false) => {
     if (!sym) return;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setWarmingUp(false);
     try {
-      const data = await apiFetch(`/api/predict?symbol=${sym}&horizon=${hor}${refresh ? '&refresh=true' : ''}`);
+      const data = await apiFetch(
+        `/api/predict?symbol=${sym}&horizon=${hor}${refresh ? '&refresh=true' : ''}`,
+        {},
+        { onWarmup: () => setWarmingUp(true) }
+      );
       setPrediction(data);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+    } catch (e) { setError(e.isWarmup ? 'Server timed out waking up. Please try again.' : e.message); }
+    finally { setLoading(false); setWarmingUp(false); }
   }, []);
 
   const horizonLabels = { 7: '7-Day', 30: '30-Day', 90: '90-Day' };
@@ -3436,16 +3487,24 @@ const PredictionView = ({ portfolio }) => {
         </div>
       )}
 
-      {error && (
-        <div className="p-4 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
-          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
-          {error.includes('not found') && (
-            <p className="text-xs mt-1" style={{ color: C.textDim }}>Train the model first: <code>python -m backend.ml.pipeline --symbol {symbol} --horizon {horizon}</code></p>
-          )}
+      {warmingUp && (
+        <div className="p-4 rounded-lg border flex items-center gap-3" style={{ background: 'rgba(212,169,69,0.08)', borderColor: C.gold }}>
+          <RefreshCw size={16} className="spin shrink-0" style={{ color: C.gold }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: C.gold }}>Server waking up (free tier)</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>Render free tier sleeps after inactivity. Auto-retrying — this takes up to 60 seconds on first load.</p>
+          </div>
         </div>
       )}
 
-      {loading && (
+      {error && (
+        <div className="p-4 rounded-lg border" style={{ background: 'rgba(201,112,73,0.1)', borderColor: C.neg }}>
+          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+          <button onClick={() => symbol && fetchPrediction(symbol, horizon)} className="text-xs mt-2 underline" style={{ color: C.gold }}>Try again</button>
+        </div>
+      )}
+
+      {loading && !warmingUp && (
         <div className="space-y-4">
           <div className="h-48 rounded-xl skeleton" />
           <div className="grid grid-cols-3 gap-4">{[1,2,3].map(i => <div key={i} className="h-24 rounded-xl skeleton" />)}</div>
