@@ -56,6 +56,17 @@ function Delta({ v, suffix = '' }: { v: number; suffix?: string }) {
 
 type Tab = 'overview' | 'analysis' | 'montecarlo' | 'signals' | 'market' | 'recommendations' | 'alerts' | 'crypto' | 'etfs';
 
+// ─── Pre-computed backtest results (backtesting-trading-strategies skill) ──
+// Run: python3 skill/scripts/backtest.py --strategy <s> --symbol <sym> --period 1y
+const PRECOMPUTED_BT = [
+  { symbol: 'BTC-USD', strategy: 'MACD',         total_return_pct:   2.10, sharpe_ratio:  0.14, win_rate_pct: 28.0, max_drawdown_pct: -21.21, total_trades: 25 },
+  { symbol: 'BTC-USD', strategy: 'RSI Reversal',  total_return_pct:   1.50, sharpe_ratio:  0.12, win_rate_pct: 54.2, max_drawdown_pct: -25.10, total_trades: 24 },
+  { symbol: 'ETH-USD', strategy: 'Momentum',      total_return_pct: -11.91, sharpe_ratio: -0.17, win_rate_pct: 26.7, max_drawdown_pct: -45.11, total_trades: 15 },
+  { symbol: 'ETH-USD', strategy: 'MACD',          total_return_pct: -37.85, sharpe_ratio: -0.49, win_rate_pct: 19.2, max_drawdown_pct: -66.49, total_trades: 26 },
+  { symbol: 'SOL-USD', strategy: 'MACD',          total_return_pct: -14.54, sharpe_ratio:  0.01, win_rate_pct: 34.6, max_drawdown_pct: -57.23, total_trades: 26 },
+  { symbol: 'SOL-USD', strategy: 'RSI Reversal',  total_return_pct: -38.90, sharpe_ratio: -0.38, win_rate_pct: 47.4, max_drawdown_pct: -60.19, total_trades: 19 },
+] as const;
+
 // ─── Main Component ────────────────────────────────────────────────────────
 export default function TradingDashboard() {
   const [tab, setTab] = useState<Tab>('overview');
@@ -87,6 +98,18 @@ export default function TradingDashboard() {
   const [etfPrices, setEtfPrices]     = useState<Record<string, { price: number; change_pct: number }>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen]   = useState(false);
+
+  // ── Server wake-up state ────────────────────────────────────────────────
+  const [serverStatus, setServerStatus] = useState<'unknown' | 'warming' | 'online'>('unknown');
+
+  // ── Smart Money Signals (Binance on-chain, browser-side) ────────────────
+  type SmartSignal = {
+    signalId: number; ticker: string; direction: string; smartMoneyCount: number;
+    maxGain: string; exitRate: number; status: string; alertPrice: string;
+    currentPrice: string; signalTriggerTime: number; launchPlatform?: string;
+  };
+  const [smartSignals, setSmartSignals] = useState<{ sol: SmartSignal[]; bsc: SmartSignal[] } | null>(null);
+  const [loadingSignals, setLoadingSignals] = useState(false);
 
   // Sort State
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
@@ -143,7 +166,10 @@ export default function TradingDashboard() {
 
   // ── Snapshot ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch(`${API_BASE}/api/snapshot`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() : null).then(d => d && setSnapshot(d)).catch(() => {});
+    fetch(`${API_BASE}/api/snapshot`, { signal: AbortSignal.timeout(8000) })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) { setSnapshot(d); setServerStatus('online'); } })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -154,12 +180,13 @@ export default function TradingDashboard() {
   useEffect(() => {
     const fetchPrices = async (symbols: string[], setter: (m: Record<string, { price: number; change_pct: number }>) => void) => {
       try {
-        const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`, { signal: AbortSignal.timeout(10000) });
         if (!res.ok) return;
         const data: Array<{ symbol: string; price: number; change_pct: number; error?: string }> = await res.json();
         const map: Record<string, { price: number; change_pct: number }> = {};
         data.forEach(d => { if (!d.error) map[d.symbol] = d; });
         setter(map);
+        setServerStatus('online');
       } catch { /* silent */ }
     };
     if (tab === 'crypto') fetchPrices(CRYPTO_WATCHLIST.map(c => c.symbol), setCryptoPrices);
@@ -211,6 +238,56 @@ export default function TradingDashboard() {
 
     return () => window.clearInterval(interval);
   }, [tab]);
+
+  // ── Server wake-up ping ───────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const ping = async () => {
+      try {
+        await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(4000) });
+        if (!cancelled) setServerStatus('online');
+      } catch {
+        if (!cancelled) {
+          setServerStatus('warming');
+          setTimeout(ping, 15000);
+        }
+      }
+    };
+    ping();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Smart Money Signals (Binance public API — no auth, CORS-safe) ─────────
+  const fetchSmartSignals = useCallback(async () => {
+    setLoadingSignals(true);
+    const call = (chainId: string) =>
+      fetch('https://web3.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/web/signal/smart-money/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', 'User-Agent': 'binance-web3/1.1 (Skill)' },
+        body: JSON.stringify({ smartSignalType: '', page: 1, pageSize: 20, chainId }),
+        signal: AbortSignal.timeout(12000),
+      });
+    try {
+      const [s, b] = await Promise.all([call('CT_501'), call('56')]);
+      const parse = async (r: Response) => {
+        if (!r.ok) return [];
+        const d = await r.json();
+        return (d.data ?? []) as SmartSignal[];
+      };
+      const [sol, bsc] = await Promise.all([parse(s), parse(b)]);
+      setSmartSignals({
+        sol: sol.filter(x => x.status === 'active').slice(0, 6),
+        bsc: bsc.filter(x => x.status === 'active').slice(0, 6),
+      });
+    } catch {
+      setSmartSignals({ sol: [], bsc: [] });
+    }
+    setLoadingSignals(false);
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'signals') fetchSmartSignals();
+  }, [tab, fetchSmartSignals]);
 
   // ── Search across all assets ──────────────────────────────────────────────
   const allAssets = useMemo(() => [
@@ -290,6 +367,20 @@ export default function TradingDashboard() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-gray-100 selection:bg-emerald-500/30">
+
+      {/* ── Server wake-up banner ──────────────────────────────────────── */}
+      {serverStatus === 'warming' && (
+        <div className="bg-amber-950/60 border-b border-amber-700/40 px-6 py-2 text-sm text-amber-200 flex items-center gap-2 z-50 relative">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin flex-shrink-0 text-amber-400" />
+          <span><strong className="text-amber-300">Backend warming up</strong> on Render (~30 s) — live prices &amp; backtests load automatically once online.</span>
+          <span className="ml-auto text-amber-500 text-xs tabular-nums">Auto-retry every 15 s</span>
+        </div>
+      )}
+      {serverStatus === 'online' && (
+        <div className="bg-emerald-950/40 border-b border-emerald-800/30 px-6 py-1.5 text-xs text-emerald-400 flex items-center gap-2 z-50 relative">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" /> Backend online — live data active
+        </div>
+      )}
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="border-b border-gray-800 px-6 py-3 sticky top-0 z-30 sticky top-0 z-50 bg-gray-950/70 backdrop-blur-2xl shadow-sm border-b border-transparent [border-image:linear-gradient(to_right,transparent,rgba(52,211,153,0.25),rgba(34,211,238,0.2),transparent)_1]">
@@ -598,61 +689,208 @@ export default function TradingDashboard() {
             TAB: BACKTEST / SIGNALS
         ─────────────────────────────────────────────────────────────────── */}
         {tab === 'signals' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-400">RSI Mean-Reversion strategy · 1-year backtest · daily candles</p>
-              <Button size="sm" className="bg-emerald-800 hover:bg-emerald-700" onClick={runBacktests} disabled={loadingBT}>
-                <Activity className={`h-4 w-4 mr-2 ${loadingBT ? 'animate-spin' : ''}`} />
-                {loadingBT ? 'Running…' : 'Run All Backtests'}
-              </Button>
-            </div>
+          <div className="space-y-6">
 
-            {Object.keys(backtests).length === 0 && !loadingBT && (
-              <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
-                <CardContent className="py-16 text-center text-gray-500">
-                  Click &quot;Run All Backtests&quot; to analyse your top holdings via the trading API
-                </CardContent>
-              </Card>
-            )}
-
-            {loadingBT && (
-              <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
-                <CardContent className="py-16 text-center text-gray-400 animate-pulse">
-                  Running backtests via trading API…
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {Object.values(backtests).map(bt => (
-                <Card key={bt.total_trades} className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60 transition-all duration-500 hover:shadow-2xl hover:-translate-y-0.5 hover:ring-1 hover:ring-emerald-500/40 hover:shadow-emerald-900/30">
-                  <CardContent className="pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-white text-lg">{(bt as {symbol?: string}).symbol ?? '—'}</span>
-                        <p className="text-xs text-gray-500">RSI · 1Y · Daily</p>
-                      </div>
-                      <span className={`text-xl font-bold ${(bt.total_return_pct ?? 0) >= 0 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-red-400 font-semibold tabular-nums'}`}>
-                        {fmtPct(bt.total_return_pct ?? 0)}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      {[
-                        ['Win Rate',     `${(bt.win_rate_pct ?? 0).toFixed(0)}%`,          (bt.win_rate_pct ?? 0) >= 55 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-yellow-400'],
-                        ['Sharpe',       (bt.sharpe_ratio ?? 0).toFixed(2),                (bt.sharpe_ratio ?? 0) >= 1 ? 'text-emerald-400 font-semibold tabular-nums' : 'text-yellow-400'],
-                        ['Max Drawdown', `${(bt.max_drawdown_pct ?? 0).toFixed(1)}%`,       'text-red-400 font-semibold tabular-nums'],
-                        ['Trades',       String(bt.total_trades ?? 0),                     'text-white'],
-                      ].map(([label, val, col]) => (
-                        <div key={label} className="bg-gray-800 rounded p-2">
-                          <div className="text-xs text-gray-500">{label}</div>
-                          <div className={`font-semibold ${col}`}>{val}</div>
+            {/* ── Section 1: Smart Money Signals (Binance on-chain) ──────── */}
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-yellow-400" />
+                    <span className="bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">
+                      Smart Money Signals
+                    </span>
+                    <span className="text-xs font-normal text-gray-500 ml-1">via Binance on-chain · public API · no auth</span>
+                  </CardTitle>
+                  <Button size="sm" variant="outline" className="border-gray-700 bg-gray-800 hover:bg-gray-700 text-xs"
+                    onClick={fetchSmartSignals} disabled={loadingSignals}>
+                    <RefreshCw className={`h-3 w-3 mr-1.5 ${loadingSignals ? 'animate-spin' : ''}`} />
+                    {loadingSignals ? 'Loading…' : 'Refresh'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingSignals && (
+                  <div className="py-10 text-center text-gray-400 animate-pulse text-sm">Fetching on-chain signals from Binance…</div>
+                )}
+                {!loadingSignals && smartSignals && (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                    {[
+                      { chain: 'Solana', signals: smartSignals.sol, color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-800/40' },
+                      { chain: 'BSC',    signals: smartSignals.bsc, color: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-800/40' },
+                    ].map(({ chain, signals, color, bg, border }) => (
+                      <div key={chain}>
+                        <div className={`text-xs font-semibold uppercase tracking-wider ${color} mb-3 flex items-center gap-2`}>
+                          <span className={`w-2 h-2 rounded-full inline-block ${color.replace('text-', 'bg-')} animate-pulse`} />
+                          {chain} — Active Smart Money Buys
                         </div>
-                      ))}
+                        {signals.length === 0 ? (
+                          <div className="text-gray-600 text-sm py-4 text-center">No active signals right now</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {signals.map(sig => {
+                              const gain = parseFloat(sig.maxGain ?? '0');
+                              const alertP = parseFloat(sig.alertPrice ?? '0');
+                              const curP   = parseFloat(sig.currentPrice ?? '0');
+                              const pct    = alertP > 0 ? ((curP - alertP) / alertP) * 100 : 0;
+                              return (
+                                <div key={sig.signalId} className={`flex items-center gap-3 rounded-lg border ${border} ${bg} px-3 py-2.5`}>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                      <span className="font-bold text-white text-sm truncate">{sig.ticker || '—'}</span>
+                                      <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sig.direction === 'buy' ? 'bg-emerald-900/60 text-emerald-300' : 'bg-red-900/60 text-red-300'}`}>
+                                        {sig.direction?.toUpperCase()}
+                                      </span>
+                                      {sig.launchPlatform && (
+                                        <span className="text-xs text-gray-500 hidden sm:inline">{sig.launchPlatform}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                                      <span>Smart wallets: <span className="text-white font-medium">{sig.smartMoneyCount}</span></span>
+                                      <span>Exit rate: <span className={`font-medium ${sig.exitRate >= 70 ? 'text-red-400 font-semibold tabular-nums' : 'text-gray-300'}`}>{sig.exitRate}%</span></span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <div className={`text-sm font-bold tabular-nums ${gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      +{gain.toFixed(1)}% max
+                                    </div>
+                                    <div className={`text-xs tabular-nums ${pct >= 0 ? 'text-gray-400' : 'text-emerald-400'}`}>
+                                      {pct >= 0 ? '+' : ''}{pct.toFixed(1)}% vs trigger
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!loadingSignals && !smartSignals && (
+                  <div className="py-8 text-center text-gray-500 text-sm">
+                    Click <strong>Refresh</strong> to load on-chain smart money signals
+                  </div>
+                )}
+                <p className="text-xs text-gray-600 mt-4">Source: Binance Web3 Smart Money API · Solana (CT_501) &amp; BSC (56) · Active signals only · Not financial advice</p>
+              </CardContent>
+            </Card>
+
+            {/* ── Section 2: Pre-computed Strategy Backtests ─────────────── */}
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-cyan-400" /> Strategy Analysis — 1-Year Backtest
+                  <span className="text-xs font-normal text-gray-500">· backtesting-trading-strategies skill · yfinance · daily candles</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-4 py-3 text-xs text-amber-200 flex items-start gap-2">
+                  <Brain className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-amber-400" />
+                  <div>
+                    <strong className="text-amber-300">Key insight (us-stock-analysis skill):</strong> Buy &amp; Hold dominates active strategies for high-beta crypto — BTC +82%+ (1Y) vs MACD +2.1%, RSI +1.5%.
+                    Active strategies consistently underperform during strong trending markets. Use signals as confirmation, not entry triggers.
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {PRECOMPUTED_BT.map((bt, i) => (
+                    <div key={i} className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/40">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div className="font-bold text-white">{bt.symbol.replace('-USD', '')}</div>
+                          <div className="text-xs text-gray-500">{bt.strategy} · 1Y · Daily</div>
+                        </div>
+                        <span className={`text-lg font-bold tabular-nums ${bt.total_return_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {bt.total_return_pct >= 0 ? '+' : ''}{bt.total_return_pct.toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {([
+                          ['Win Rate',  `${bt.win_rate_pct.toFixed(0)}%`,       bt.win_rate_pct >= 55 ? 'text-emerald-400' : 'text-yellow-400'],
+                          ['Sharpe',    bt.sharpe_ratio.toFixed(2),              bt.sharpe_ratio >= 1 ? 'text-emerald-400' : bt.sharpe_ratio >= 0 ? 'text-yellow-400' : 'text-red-400'],
+                          ['Max DD',    `${bt.max_drawdown_pct.toFixed(1)}%`,    'text-red-400'],
+                          ['Trades',   String(bt.total_trades),                 'text-white'],
+                        ] as [string, string, string][]).map(([label, val, col]) => (
+                          <div key={label} className="bg-gray-900/60 rounded p-2">
+                            <div className="text-gray-500 mb-0.5">{label}</div>
+                            <div className={`font-semibold ${col}`}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Section 3: Live Backtest Engine (Render API) ───────────── */}
+            <Card className="bg-gray-900/40 backdrop-blur-xl border-gray-800/60">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-bold bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent flex items-center gap-2">
+                    <Cpu className="h-4 w-4 text-emerald-400" /> Live Backtest Engine
+                    <span className="text-xs font-normal text-gray-500">· RSI strategy · top 10 holdings · Render API</span>
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    {serverStatus === 'warming' && (
+                      <span className="text-xs text-amber-400 flex items-center gap-1">
+                        <RefreshCw className="h-3 w-3 animate-spin" /> Server warming up…
+                      </span>
+                    )}
+                    <Button size="sm" className="bg-emerald-800 hover:bg-emerald-700 text-xs" onClick={runBacktests} disabled={loadingBT || serverStatus === 'warming'}>
+                      <Activity className={`h-3.5 w-3.5 mr-1.5 ${loadingBT ? 'animate-spin' : ''}`} />
+                      {loadingBT ? 'Running…' : 'Run Live Backtests'}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {serverStatus === 'warming' && Object.keys(backtests).length === 0 && !loadingBT && (
+                  <div className="py-8 text-center text-amber-400/70 text-sm">
+                    <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 opacity-50" />
+                    Waiting for backend server to come online…
+                  </div>
+                )}
+                {serverStatus !== 'warming' && Object.keys(backtests).length === 0 && !loadingBT && (
+                  <div className="py-8 text-center text-gray-500 text-sm">
+                    Click <strong className="text-gray-300">Run Live Backtests</strong> to run RSI strategy against your top 10 holdings via the Render backend
+                  </div>
+                )}
+                {loadingBT && (
+                  <div className="py-8 text-center text-gray-400 animate-pulse text-sm">Running backtests via Render API…</div>
+                )}
+                {Object.keys(backtests).length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {Object.values(backtests).map(bt => (
+                      <div key={(bt as any).symbol ?? bt.total_trades} className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/40">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="font-bold text-white">{(bt as any).symbol ?? '—'}</div>
+                            <div className="text-xs text-gray-500">RSI · 1Y · Daily</div>
+                          </div>
+                          <span className={`text-lg font-bold tabular-nums ${(bt.total_return_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {fmtPct(bt.total_return_pct ?? 0)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {([
+                            ['Win Rate',  `${(bt.win_rate_pct ?? 0).toFixed(0)}%`,       (bt.win_rate_pct ?? 0) >= 55 ? 'text-emerald-400' : 'text-yellow-400'],
+                            ['Sharpe',    (bt.sharpe_ratio ?? 0).toFixed(2),              (bt.sharpe_ratio ?? 0) >= 1 ? 'text-emerald-400' : 'text-yellow-400'],
+                            ['Max DD',    `${(bt.max_drawdown_pct ?? 0).toFixed(1)}%`,    'text-red-400'],
+                            ['Trades',   String(bt.total_trades ?? 0),                   'text-white'],
+                          ] as [string, string, string][]).map(([label, val, col]) => (
+                            <div key={label} className="bg-gray-900/60 rounded p-2">
+                              <div className="text-gray-500 mb-0.5">{label}</div>
+                              <div className={`font-semibold ${col}`}>{val}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 
