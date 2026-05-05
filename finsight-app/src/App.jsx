@@ -2781,6 +2781,102 @@ async function apiFetch(path, opts = {}) {
 }
 
 /* ============================================================
+   LOCAL SYMBOL INDEX — fallback when backend is unreachable
+   ============================================================ */
+const LOCAL_SYMBOLS = [
+  {symbol:'AAPL', name:'Apple Inc.',                          sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'MSFT', name:'Microsoft Corporation',               sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'GOOGL',name:'Alphabet Inc.',                       sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'AMZN', name:'Amazon.com Inc.',                     sector:'Consumer Discretionary', exchange:'NASDAQ'},
+  {symbol:'NVDA', name:'NVIDIA Corporation',                  sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'META', name:'Meta Platforms Inc.',                 sector:'Communication Services', exchange:'NASDAQ'},
+  {symbol:'TSLA', name:'Tesla Inc.',                          sector:'Consumer Discretionary', exchange:'NASDAQ'},
+  {symbol:'BRK.B',name:'Berkshire Hathaway Inc.',             sector:'Financials',             exchange:'NYSE'},
+  {symbol:'LLY',  name:'Eli Lilly and Company',               sector:'Health Care',            exchange:'NYSE'},
+  {symbol:'JPM',  name:'JPMorgan Chase & Co.',                sector:'Financials',             exchange:'NYSE'},
+  {symbol:'V',    name:'Visa Inc.',                           sector:'Financials',             exchange:'NYSE'},
+  {symbol:'XOM',  name:'Exxon Mobil Corporation',             sector:'Energy',                 exchange:'NYSE'},
+  {symbol:'UNH',  name:'UnitedHealth Group Inc.',             sector:'Health Care',            exchange:'NYSE'},
+  {symbol:'JNJ',  name:'Johnson & Johnson',                   sector:'Health Care',            exchange:'NYSE'},
+  {symbol:'WMT',  name:'Walmart Inc.',                        sector:'Consumer Staples',       exchange:'NYSE'},
+  {symbol:'MA',   name:'Mastercard Inc.',                     sector:'Financials',             exchange:'NYSE'},
+  {symbol:'AVGO', name:'Broadcom Inc.',                       sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'HD',   name:'The Home Depot Inc.',                 sector:'Consumer Discretionary', exchange:'NYSE'},
+  {symbol:'CVX',  name:'Chevron Corporation',                 sector:'Energy',                 exchange:'NYSE'},
+  {symbol:'AMD',  name:'Advanced Micro Devices Inc.',         sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'NFLX', name:'Netflix Inc.',                        sector:'Communication Services', exchange:'NASDAQ'},
+  {symbol:'CRM',  name:'Salesforce Inc.',                     sector:'Technology',             exchange:'NYSE'},
+  {symbol:'ADBE', name:'Adobe Inc.',                          sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'QCOM', name:'Qualcomm Inc.',                       sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'DIS',  name:'The Walt Disney Company',             sector:'Communication Services', exchange:'NYSE'},
+  {symbol:'GS',   name:'The Goldman Sachs Group Inc.',        sector:'Financials',             exchange:'NYSE'},
+  {symbol:'BAC',  name:'Bank of America Corporation',         sector:'Financials',             exchange:'NYSE'},
+  {symbol:'INTC', name:'Intel Corporation',                   sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'PYPL', name:'PayPal Holdings Inc.',                sector:'Financials',             exchange:'NASDAQ'},
+  {symbol:'UBER', name:'Uber Technologies Inc.',              sector:'Industrials',            exchange:'NYSE'},
+  {symbol:'COIN', name:'Coinbase Global Inc.',                sector:'Financials',             exchange:'NASDAQ'},
+  {symbol:'PLTR', name:'Palantir Technologies Inc.',          sector:'Technology',             exchange:'NYSE'},
+  {symbol:'SNOW', name:'Snowflake Inc.',                      sector:'Technology',             exchange:'NYSE'},
+  {symbol:'CRWD', name:'CrowdStrike Holdings Inc.',           sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'NET',  name:'Cloudflare Inc.',                     sector:'Technology',             exchange:'NYSE'},
+  {symbol:'NOW',  name:'ServiceNow Inc.',                     sector:'Technology',             exchange:'NYSE'},
+  {symbol:'PANW', name:'Palo Alto Networks Inc.',             sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'MSTR', name:'MicroStrategy Inc.',                  sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'ARM',  name:'Arm Holdings plc',                    sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'TSM',  name:'Taiwan Semiconductor Manufacturing',  sector:'Technology',             exchange:'NYSE'},
+  {symbol:'ASML', name:'ASML Holding N.V.',                   sector:'Technology',             exchange:'NASDAQ'},
+  {symbol:'F',    name:'Ford Motor Company',                  sector:'Consumer Discretionary', exchange:'NYSE'},
+  {symbol:'GM',   name:'General Motors Company',              sector:'Consumer Discretionary', exchange:'NYSE'},
+  {symbol:'BA',   name:'The Boeing Company',                  sector:'Industrials',            exchange:'NYSE'},
+  {symbol:'CAT',  name:'Caterpillar Inc.',                    sector:'Industrials',            exchange:'NYSE'},
+  {symbol:'LMT',  name:'Lockheed Martin Corporation',         sector:'Industrials',            exchange:'NYSE'},
+  {symbol:'GE',   name:'GE Aerospace',                        sector:'Industrials',            exchange:'NYSE'},
+  {symbol:'WFC',  name:'Wells Fargo & Company',               sector:'Financials',             exchange:'NYSE'},
+  {symbol:'MS',   name:'Morgan Stanley',                      sector:'Financials',             exchange:'NYSE'},
+  {symbol:'BLK',  name:'BlackRock Inc.',                      sector:'Financials',             exchange:'NYSE'},
+  {symbol:'SCHW', name:'Charles Schwab Corporation',          sector:'Financials',             exchange:'NYSE'},
+  {symbol:'SPY',  name:'SPDR S&P 500 ETF Trust',              sector:'ETF',                    exchange:'NYSE'},
+  {symbol:'QQQ',  name:'Invesco QQQ Trust',                   sector:'ETF',                    exchange:'NASDAQ'},
+  {symbol:'GLD',  name:'SPDR Gold Shares',                    sector:'ETF',                    exchange:'NYSE'},
+  {symbol:'TLT',  name:'iShares 20+ Year Treasury Bond ETF',  sector:'ETF',                    exchange:'NASDAQ'},
+  {symbol:'BTC-USD',name:'Bitcoin USD',                       sector:'Crypto',                 exchange:'Crypto'},
+  {symbol:'ETH-USD',name:'Ethereum USD',                      sector:'Crypto',                 exchange:'Crypto'},
+  {symbol:'SOL-USD',name:'Solana USD',                        sector:'Crypto',                 exchange:'Crypto'},
+];
+
+const _localSynonyms = {
+  apple:'AAPL', microsoft:'MSFT', google:'GOOGL', alphabet:'GOOGL', amazon:'AMZN',
+  nvidia:'NVDA', meta:'META', facebook:'META', tesla:'TSLA', berkshire:'BRK.B',
+  jpmorgan:'JPM', visa:'V', exxon:'XOM', walmart:'WMT', mastercard:'MA',
+  netflix:'NFLX', disney:'DIS', intel:'INTC', paypal:'PYPL', bitcoin:'BTC-USD',
+  ethereum:'ETH-USD', solana:'SOL-USD', amd:'AMD', salesforce:'CRM', palantir:'PLTR',
+  coinbase:'COIN', snowflake:'SNOW', crowdstrike:'CRWD', cloudflare:'NET', boeing:'BA',
+  ford:'F', gold:'GLD', 'morgan stanley':'MS', blackrock:'BLK',
+};
+
+function localSearch(q, limit = 8) {
+  const s = q.trim().toLowerCase();
+  if (!s) return [];
+  const out = [], seen = new Set();
+  const add = (item, mt, sc) => {
+    if (seen.has(item.symbol)) return;
+    seen.add(item.symbol);
+    out.push({ ...item, match_type: mt, _sc: sc });
+  };
+  // exact symbol
+  LOCAL_SYMBOLS.forEach(r => { if (r.symbol.toLowerCase() === s) add(r, 'exact_symbol', 100); });
+  // synonym
+  const syn = _localSynonyms[s];
+  if (syn) { const r = LOCAL_SYMBOLS.find(x => x.symbol === syn); if (r) add(r, 'synonym', 90); }
+  // prefix symbol
+  LOCAL_SYMBOLS.forEach(r => { if (r.symbol.toLowerCase().startsWith(s)) add(r, 'prefix', 80); });
+  // name contains
+  LOCAL_SYMBOLS.forEach(r => { if (r.name.toLowerCase().includes(s)) add(r, 'fts', 60); });
+  out.sort((a, b) => b._sc - a._sc);
+  return out.slice(0, limit).map(({ _sc, ...rest }) => rest);
+}
+
+/* ============================================================
    SEARCH BAR  — debounced, keyboard navigation, recent cache
    ============================================================ */
 const MAX_RECENT = 6;
@@ -2813,7 +2909,13 @@ const SearchBar = ({ onSelect }) => {
     setLoading(true);
     apiFetch(`/api/search?q=${encodeURIComponent(debounced)}&limit=8`)
       .then(d => { setResults(d.results || []); setOpen(true); setCursor(-1); })
-      .catch(() => setResults([]))
+      .catch(() => {
+        // Backend unreachable — fall back to local index
+        const fallback = localSearch(debounced, 8);
+        setResults(fallback);
+        setOpen(true);
+        setCursor(-1);
+      })
       .finally(() => setLoading(false));
   }, [debounced]);
 
@@ -3035,10 +3137,10 @@ const TradingTipsView = ({ portfolio }) => {
       </div>
 
       <div className="flex gap-3">
-        <SearchBar onSelect={item => fetchTip(item.symbol)} />
+        <SearchBar onSelect={item => { setSymbol(item.symbol); fetchTip(item.symbol); }} />
         <button
           onClick={() => { if (symbol) fetchTip(symbol.toUpperCase()); }}
-          disabled={loading}
+          disabled={loading || !symbol}
           className="btn-primary px-4 h-9 rounded-lg text-sm font-medium shrink-0">
           {loading ? 'Analyzing…' : 'Analyze'}
         </button>
@@ -3279,10 +3381,10 @@ const PredictionView = ({ portfolio }) => {
   const probColors = p => p >= 0.6 ? C.pos : p >= 0.4 ? C.gold : C.neg;
 
   const chartData = prediction ? [
-    { label: 'Current', price: prediction.base_price, lower: prediction.base_price, upper: prediction.base_price },
-    { label: `+${horizon}d (Bear)`, price: prediction.scenarios?.find(s => s.scenario === 'Bear')?.price, lower: prediction.lower_bound, upper: prediction.lower_bound },
-    { label: `+${horizon}d (Base)`, price: prediction.predicted_price, lower: prediction.lower_bound, upper: prediction.upper_bound },
-    { label: `+${horizon}d (Bull)`, price: prediction.scenarios?.find(s => s.scenario === 'Bull')?.price, lower: prediction.upper_bound, upper: prediction.upper_bound },
+    { label: 'Current', price: prediction.current_price, lower: prediction.current_price, upper: prediction.current_price },
+    { label: `+${horizon}d (Bear)`, price: prediction.scenarios?.find(s => s.label === 'Bear')?.price, lower: prediction.confidence_low, upper: prediction.confidence_low },
+    { label: `+${horizon}d (Base)`, price: prediction.target_price, lower: prediction.confidence_low, upper: prediction.confidence_high },
+    { label: `+${horizon}d (Bull)`, price: prediction.scenarios?.find(s => s.label === 'Bull')?.price, lower: prediction.confidence_high, upper: prediction.confidence_high },
   ].filter(d => d.price) : [];
 
   return (
@@ -3358,37 +3460,37 @@ const PredictionView = ({ portfolio }) => {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-2xl font-mono font-bold" style={{ color: C.text }}>{prediction.symbol}</span>
                   <span className="text-sm px-2 py-0.5 rounded" style={{ background: C.surface3, color: C.textDim }}>
-                    {horizonLabels[prediction.horizon_days]} Forecast
+                    {prediction.horizon}d Forecast
                   </span>
-                  {prediction.cached && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.surface3, color: C.textFaint }}>cached</span>}
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-serif font-bold" style={{ color: prediction.predicted_return_pct >= 0 ? C.pos : C.neg }}>
-                    {prediction.predicted_return_pct >= 0 ? '+' : ''}{prediction.predicted_return_pct?.toFixed(2)}%
+                  <span className="text-3xl font-serif font-bold" style={{ color: (prediction.expected_return_pct ?? 0) >= 0 ? C.pos : C.neg }}>
+                    {(prediction.expected_return_pct ?? 0) >= 0 ? '+' : ''}{prediction.expected_return_pct?.toFixed(2)}%
                   </span>
-                  <span className="text-lg" style={{ color: C.text }}>${prediction.predicted_price?.toFixed(2)}</span>
+                  <span className="text-lg" style={{ color: C.text }}>${prediction.target_price?.toFixed(2)}</span>
                 </div>
-                <p className="text-sm mt-0.5" style={{ color: C.textDim }}>from ${prediction.base_price?.toFixed(2)}</p>
+                <p className="text-sm mt-0.5" style={{ color: C.textDim }}>from ${prediction.current_price?.toFixed(2)}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs mb-1" style={{ color: C.textDim }}>80% CI</p>
-                <p className="font-mono font-semibold" style={{ color: C.text }}>${prediction.lower_bound?.toFixed(2)}</p>
+                <p className="text-xs mb-1" style={{ color: C.textDim }}>90% CI</p>
+                <p className="font-mono font-semibold" style={{ color: C.text }}>${prediction.confidence_low?.toFixed(2)}</p>
                 <p className="text-xs" style={{ color: C.textDim }}>to</p>
-                <p className="font-mono font-semibold" style={{ color: C.text }}>${prediction.upper_bound?.toFixed(2)}</p>
+                <p className="font-mono font-semibold" style={{ color: C.text }}>${prediction.confidence_high?.toFixed(2)}</p>
               </div>
             </div>
 
             {/* Price bar viz */}
             {(() => {
-              const lo = prediction.lower_bound, hi = prediction.upper_bound, base = prediction.base_price, pred = prediction.predicted_price;
-              const range = hi - lo || 1;
+              const lo = prediction.confidence_low, hi = prediction.confidence_high, base = prediction.current_price, pred = prediction.target_price;
+              const range = (hi - lo) || 1;
               const pos = (v) => `${((v - lo) / range * 100).toFixed(1)}%`;
+              const isUp = (prediction.expected_return_pct ?? 0) >= 0;
               return (
                 <div className="mt-4 relative h-6">
                   <div className="absolute inset-y-0 left-0 right-0 rounded-full" style={{ background: C.surface3 }} />
-                  <div className="absolute inset-y-0 rounded-full" style={{ left: pos(lo), right: `${(100 - ((hi - lo) / range * 100)).toFixed(1)}%`, background: prediction.predicted_return_pct >= 0 ? C.pos + '30' : C.neg + '30' }} />
+                  <div className="absolute inset-y-0 rounded-full" style={{ left: pos(lo), right: `${(100 - ((hi - lo) / range * 100)).toFixed(1)}%`, background: isUp ? C.pos + '30' : C.neg + '30' }} />
                   <div className="absolute top-0 bottom-0 w-0.5" style={{ left: pos(base), background: C.textDim }} />
-                  <div className="absolute top-0 bottom-0 w-1 rounded-full" style={{ left: `calc(${pos(pred)} - 2px)`, background: prediction.predicted_return_pct >= 0 ? C.pos : C.neg }} />
+                  <div className="absolute top-0 bottom-0 w-1 rounded-full" style={{ left: `calc(${pos(pred)} - 2px)`, background: isUp ? C.pos : C.neg }} />
                 </div>
               );
             })()}
@@ -3403,11 +3505,11 @@ const PredictionView = ({ portfolio }) => {
             ].map(({ label, val }) => (
               <div key={label} className="rounded-xl border p-4 text-center" style={{ background: C.surface, borderColor: C.border }}>
                 <p className="text-xs mb-2" style={{ color: C.textDim }}>{label}</p>
-                <p className="text-2xl font-serif font-bold" style={{ color: probColors(val) }}>
-                  {(val * 100).toFixed(0)}%
+                <p className="text-2xl font-serif font-bold" style={{ color: probColors(val / 100) }}>
+                  {(val ?? 0).toFixed(0)}%
                 </p>
                 <div className="mt-2 h-1 rounded-full" style={{ background: C.surface3 }}>
-                  <div className="h-full rounded-full" style={{ width: `${val * 100}%`, background: probColors(val) }} />
+                  <div className="h-full rounded-full" style={{ width: `${val ?? 0}%`, background: probColors(val / 100) }} />
                 </div>
               </div>
             ))}
@@ -3420,15 +3522,15 @@ const PredictionView = ({ portfolio }) => {
             </div>
             <div className="divide-y" style={{ borderColor: C.border }}>
               {prediction.scenarios?.map(s => (
-                <div key={s.scenario} className="px-4 py-3 flex items-center gap-4">
-                  <span className="w-12 text-xs font-medium" style={{ color: s.scenario === 'Bull' ? C.pos : s.scenario === 'Bear' ? C.neg : C.gold }}>{s.scenario}</span>
+                <div key={s.label} className="px-4 py-3 flex items-center gap-4">
+                  <span className="w-12 text-xs font-medium" style={{ color: s.label === 'Bull' ? C.pos : s.label === 'Bear' ? C.neg : C.gold }}>{s.label}</span>
                   <div className="flex-1 h-1.5 rounded-full" style={{ background: C.surface3 }}>
                     <div className="h-full rounded-full"
-                      style={{ width: `${s.probability * 100}%`, background: s.scenario === 'Bull' ? C.pos : s.scenario === 'Bear' ? C.neg : C.gold }} />
+                      style={{ width: `${s.probability ?? 0}%`, background: s.label === 'Bull' ? C.pos : s.label === 'Bear' ? C.neg : C.gold }} />
                   </div>
-                  <span className="w-10 text-xs text-right" style={{ color: C.textDim }}>{(s.probability * 100).toFixed(0)}%</span>
-                  <span className="w-20 font-mono text-sm text-right font-semibold" style={{ color: s.return_pct >= 0 ? C.pos : C.neg }}>
-                    {s.return_pct >= 0 ? '+' : ''}{s.return_pct?.toFixed(2)}%
+                  <span className="w-10 text-xs text-right" style={{ color: C.textDim }}>{(s.probability ?? 0).toFixed(0)}%</span>
+                  <span className="w-20 font-mono text-sm text-right font-semibold" style={{ color: (s.return_pct ?? 0) >= 0 ? C.pos : C.neg }}>
+                    {(s.return_pct ?? 0) >= 0 ? '+' : ''}{s.return_pct?.toFixed(2)}%
                   </span>
                   <span className="w-20 font-mono text-sm text-right" style={{ color: C.text }}>${s.price?.toFixed(2)}</span>
                 </div>
@@ -3442,10 +3544,10 @@ const PredictionView = ({ portfolio }) => {
               <p className="text-xs font-medium mb-2" style={{ color: C.textDim }}>Model Information</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Version', val: prediction.model_meta.version?.slice(0,8) || '—' },
-                  { label: 'Dir. Accuracy', val: `${((prediction.model_meta.directional_accuracy || 0) * 100).toFixed(1)}%` },
-                  { label: 'XGB Weight', val: `${((prediction.model_meta.xgb_weight || 0.6) * 100).toFixed(0)}%` },
-                  { label: 'LSTM Weight', val: `${((prediction.model_meta.lstm_weight || 0.4) * 100).toFixed(0)}%` },
+                  { label: 'Version', val: prediction.model_meta.version || '—' },
+                  { label: 'Dir. Accuracy', val: `${(prediction.model_meta.directional_accuracy || 0).toFixed(1)}%` },
+                  { label: 'Method', val: prediction.model_meta.method || 'statistical' },
+                  { label: 'Ann. Vol', val: `${(prediction.ann_vol_pct || 0).toFixed(1)}%` },
                 ].map(({ label, val }) => (
                   <div key={label}>
                     <p className="text-[10px] mb-0.5" style={{ color: C.textFaint }}>{label}</p>
@@ -3457,7 +3559,9 @@ const PredictionView = ({ portfolio }) => {
           )}
 
           <div className="rounded-lg p-3 border-l-2" style={{ borderColor: C.gold, background: C.surface2 }}>
-            <p className="text-xs leading-relaxed" style={{ color: C.textDim }}>{prediction.disclaimer}</p>
+            <p className="text-xs leading-relaxed" style={{ color: C.textDim }}>
+              {prediction.model_meta?.note || 'Statistical model using historical price dynamics. Not financial advice.'}
+            </p>
           </div>
         </div>
       )}
