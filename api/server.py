@@ -79,6 +79,8 @@ _allowed_origins = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
     "https://surfingalien.github.io",
+    "https://finsight-app-mauve.vercel.app",
+    "https://finsight-app-surfingaliens-projects.vercel.app",
 ]
 _env_origins = os.getenv("FINSIGHT_ALLOWED_ORIGINS", "").split(",")
 _allowed_origins.extend([o.strip() for o in _env_origins if o.strip()])
@@ -267,6 +269,61 @@ def _fetch_ohlcv(symbol: str, period: str = "1y") -> "pd.DataFrame":
     return df
 
 
+def _stochastic(high: "pd.Series", low: "pd.Series", close: "pd.Series",
+                k_period: int = 14, d_period: int = 3):
+    """Stochastic Oscillator %K and %D lines."""
+    lo = low.rolling(k_period).min()
+    hi = high.rolling(k_period).max()
+    pct_k = 100 * (close - lo) / (hi - lo + 1e-9)
+    pct_d = pct_k.rolling(d_period).mean()
+    return pct_k, pct_d
+
+
+def _obv(close: "pd.Series", volume: "pd.Series") -> "pd.Series":
+    """On-Balance Volume — cumulative signed volume."""
+    direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    return (direction * volume).cumsum()
+
+
+def _fibonacci_levels(swing_high: float, swing_low: float) -> dict:
+    """Classic Fibonacci retracement levels between a swing high and low."""
+    diff = swing_high - swing_low
+    return {
+        "0.0":   round(swing_low, 2),
+        "23.6":  round(swing_low + 0.236 * diff, 2),
+        "38.2":  round(swing_low + 0.382 * diff, 2),
+        "50.0":  round(swing_low + 0.500 * diff, 2),
+        "61.8":  round(swing_low + 0.618 * diff, 2),
+        "78.6":  round(swing_low + 0.786 * diff, 2),
+        "100.0": round(swing_high, 2),
+    }
+
+
+def _rsi_divergence(price: "pd.Series", rsi: "pd.Series", lookback: int = 14) -> str:
+    """Detect bullish/bearish RSI divergence over the most recent N bars."""
+    p = price.iloc[-lookback:]
+    r = rsi.iloc[-lookback:]
+    price_up = float(p.iloc[-1]) > float(p.iloc[0])
+    rsi_up   = float(r.iloc[-1]) > float(r.iloc[0])
+    if price_up and not rsi_up:
+        return "bearish"   # price new high, RSI declining → bearish divergence
+    if not price_up and rsi_up:
+        return "bullish"   # price new low, RSI rising → bullish divergence
+    return "none"
+
+
+def _golden_death_cross(ema50: "pd.Series", ema200: "pd.Series") -> str:
+    if len(ema50) < 2 or len(ema200) < 2:
+        return "none"
+    prev = float(ema50.iloc[-2]) - float(ema200.iloc[-2])
+    curr = float(ema50.iloc[-1]) - float(ema200.iloc[-1])
+    if prev < 0 <= curr:
+        return "golden_cross"
+    if prev > 0 >= curr:
+        return "death_cross"
+    return "above_200" if curr > 0 else "below_200"
+
+
 # ─── Routes: health ───────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -395,6 +452,217 @@ async def history(
         raise HTTPException(400, str(exc))
 
 
+# ─── Routes: fundamentals ────────────────────────────────────────────────────
+
+@app.get("/api/fundamentals/{symbol}")
+async def fundamentals(symbol: str = Path(...)):
+    """Fundamental data: valuation, margins, analyst consensus, balance-sheet ratios."""
+    if not _YF_AVAILABLE:
+        raise HTTPException(503, "yfinance not available")
+    sym = symbol.upper()
+    try:
+        def _get():
+            tk   = yf.Ticker(sym)
+            info = tk.info or {}
+            fi   = tk.fast_info
+            def _f(key, fallback=0.0):
+                v = info.get(key)
+                try: return float(v) if v is not None else fallback
+                except: return fallback
+            def _pct(key):
+                v = _f(key)
+                return round(v * 100, 2) if abs(v) <= 10 else round(v, 2)  # some already in %
+            return {
+                "symbol":   sym,
+                "name":     info.get("longName") or info.get("shortName", sym),
+                "sector":   info.get("sector", ""),
+                "industry": info.get("industry", ""),
+                "exchange": info.get("exchange", ""),
+                "currency": info.get("currency", "USD"),
+                "description": (info.get("longBusinessSummary", "") or "")[:400],
+                # Price
+                "price":               round(float(fi.last_price or 0), 2),
+                "market_cap":          float(fi.market_cap or 0),
+                "enterprise_value":    _f("enterpriseValue"),
+                "beta":                round(_f("beta", 1.0), 2),
+                # Valuation
+                "pe_ratio":     round(_f("trailingPE"), 2),
+                "forward_pe":   round(_f("forwardPE"),  2),
+                "peg_ratio":    round(_f("pegRatio"),   2),
+                "price_to_book":round(_f("priceToBook"),2),
+                "price_to_sales": round(_f("priceToSalesTrailing12Months"), 2),
+                "ev_to_ebitda": round(_f("enterpriseToEbitda"), 2),
+                "ev_to_revenue":round(_f("enterpriseToRevenue"), 2),
+                # Per-share
+                "eps_ttm":     round(_f("trailingEps"), 2),
+                "eps_forward": round(_f("forwardEps"),  2),
+                # Revenue / earnings
+                "revenue_ttm":         _f("totalRevenue"),
+                "revenue_growth_yoy":  _pct("revenueGrowth"),
+                "earnings_growth_yoy": _pct("earningsGrowth"),
+                "gross_margins":       _pct("grossMargins"),
+                "operating_margins":   _pct("operatingMargins"),
+                "profit_margins":      _pct("profitMargins"),
+                # Balance sheet
+                "debt_to_equity":  round(_f("debtToEquity"),  2),
+                "current_ratio":   round(_f("currentRatio"),  2),
+                "roe":             _pct("returnOnEquity"),
+                "roa":             _pct("returnOnAssets"),
+                "free_cash_flow":  _f("freeCashflow"),
+                # Dividends
+                "dividend_yield": round(_f("dividendYield") * 100, 2),
+                "dividend_rate":  round(_f("dividendRate"), 2),
+                "payout_ratio":   _pct("payoutRatio"),
+                # Analyst consensus
+                "analyst_target":  round(_f("targetMeanPrice"), 2),
+                "analyst_low":     round(_f("targetLowPrice"),  2),
+                "analyst_high":    round(_f("targetHighPrice"), 2),
+                "recommendation":  info.get("recommendationKey", ""),
+                "num_analysts":    int(_f("numberOfAnalystOpinions")),
+                # Technical
+                "fifty_two_week_high": float(fi.fifty_two_week_high or 0),
+                "fifty_two_week_low":  float(fi.fifty_two_week_low  or 0),
+                "avg_volume":          float(_f("averageVolume")),
+                "short_ratio":         round(_f("shortRatio"), 2),
+            }
+        return await _yf_fetch(_get, timeout=12.0)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
+
+
+# ─── Routes: full technical dashboard ────────────────────────────────────────
+
+@app.get("/api/technicals/{symbol}")
+async def technical_dashboard(
+    symbol: str = Path(...),
+    period: str = Query("6mo", description="3mo|6mo|1y|2y"),
+):
+    """Complete technical analysis: Stochastic, OBV, Fibonacci, Golden/Death Cross, RSI Divergence."""
+    if not _YF_AVAILABLE:
+        raise HTTPException(503, "yfinance not available")
+    sym = symbol.upper()
+    safe_period = period if period in {"3mo", "6mo", "1y", "2y"} else "6mo"
+    try:
+        df = await _yf_fetch(lambda: _fetch_ohlcv(sym, safe_period))
+        if len(df) < 50:
+            raise ValueError("Need at least 50 bars for technical analysis")
+
+        close  = df["close"]
+        high   = df["high"]
+        low    = df["low"]
+        volume = df.get("volume", pd.Series(dtype=float))
+        price  = float(close.iloc[-1])
+
+        # Moving averages
+        ema20  = _ema(close, 20)
+        ema50  = _ema(close, 50)
+        ema200 = _ema(close, 200) if len(close) >= 200 else _ema(close, len(close))
+
+        # Indicators
+        rsi_s           = _rsi(close, 14)
+        rsi_val         = float(rsi_s.iloc[-1])
+        ml, ms, mh      = _macd(close)
+        bb_up, bb_mid, bb_lo, bb_pb, bb_w = _bollinger(close, 20)
+        atr_s           = _atr(high, low, close, 14)
+        atr_val         = float(atr_s.iloc[-1])
+        stoch_k, stoch_d = _stochastic(high, low, close)
+        sk, sd          = float(stoch_k.iloc[-1]), float(stoch_d.iloc[-1])
+        obv_s           = _obv(close, volume)
+        cross           = _golden_death_cross(ema50, ema200)
+        divergence      = _rsi_divergence(close, rsi_s)
+
+        # Fibonacci (52-week range)
+        bars_1y = min(252, len(high))
+        sh52 = float(high.iloc[-bars_1y:].max())
+        sl52 = float(low.iloc[-bars_1y:].min())
+        fib  = _fibonacci_levels(sh52, sl52)
+
+        # Nearest fib level
+        fib_vals = [(float(v), k) for k, v in fib.items()]
+        nearest_fib = min(fib_vals, key=lambda x: abs(x[0] - price))
+
+        # OBV trend (compare last bar vs 20 bars ago)
+        obv_trend = "rising" if float(obv_s.iloc[-1]) > float(obv_s.iloc[-20]) else "falling"
+
+        # Volume
+        vol_r = _vol_ratio(volume, 20) if not volume.empty else 1.0
+
+        # Overall score (0–100)
+        s = 0
+        if price > float(ema200.iloc[-1]): s += 20
+        if float(ema20.iloc[-1]) > float(ema50.iloc[-1]) > float(ema200.iloc[-1]): s += 15
+        if 40 <= rsi_val <= 70: s += 15
+        if float(mh.iloc[-1]) > 0: s += 10
+        if sk < 80: s += 10
+        if obv_trend == "rising": s += 10
+        if cross in ("golden_cross", "above_200"): s += 10
+        if divergence == "bullish": s += 10
+        if rsi_val > 75: s -= 15
+        if divergence == "bearish": s -= 10
+        if cross == "death_cross": s -= 20
+        tech_score = max(0, min(100, s))
+
+        return {
+            "symbol":      sym,
+            "price":       round(price, 2),
+            "tech_score":  tech_score,
+            "outlook":     "bullish" if tech_score >= 60 else ("bearish" if tech_score < 40 else "neutral"),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "moving_averages": {
+                "ema20":            round(float(ema20.iloc[-1]),  2),
+                "ema50":            round(float(ema50.iloc[-1]),  2),
+                "ema200":           round(float(ema200.iloc[-1]), 2),
+                "cross":            cross,
+                "price_vs_ema200_pct": round((price / float(ema200.iloc[-1]) - 1) * 100, 2),
+                "bullish_stack":    float(ema20.iloc[-1]) > float(ema50.iloc[-1]) > float(ema200.iloc[-1]),
+            },
+            "momentum": {
+                "rsi14":            round(rsi_val, 1),
+                "rsi_zone":         "overbought" if rsi_val > 70 else ("oversold" if rsi_val < 30 else "neutral"),
+                "rsi_divergence":   divergence,
+                "stoch_k":          round(sk, 1),
+                "stoch_d":          round(sd, 1),
+                "stoch_zone":       "overbought" if sk > 80 else ("oversold" if sk < 20 else "neutral"),
+                "stoch_crossover":  "bullish" if sk > sd and float(stoch_k.iloc[-2]) <= float(stoch_d.iloc[-2]) else (
+                                    "bearish" if sk < sd and float(stoch_k.iloc[-2]) >= float(stoch_d.iloc[-2]) else "none"),
+                "macd_line":        round(float(ml.iloc[-1]), 4),
+                "macd_signal_line": round(float(ms.iloc[-1]), 4),
+                "macd_hist":        round(float(mh.iloc[-1]), 4),
+                "macd_crossover":   "bullish" if float(mh.iloc[-1]) > 0 > float(mh.iloc[-2]) else (
+                                    "bearish" if float(mh.iloc[-1]) < 0 < float(mh.iloc[-2]) else "none"),
+            },
+            "volatility": {
+                "atr14":      round(atr_val, 4),
+                "atr_pct":    round(atr_val / price * 100, 2),
+                "bb_upper":   round(float(bb_up.iloc[-1]),  2),
+                "bb_mid":     round(float(bb_mid.iloc[-1]), 2),
+                "bb_lower":   round(float(bb_lo.iloc[-1]),  2),
+                "bb_pct_b":   round(float(bb_pb.iloc[-1]),  3),
+                "bb_width":   round(float(bb_w.iloc[-1]),   3),
+                "bb_squeeze": float(bb_w.iloc[-1]) < float(bb_w.rolling(20).mean().iloc[-1]) * 0.8,
+            },
+            "volume": {
+                "obv_trend":  obv_trend,
+                "vol_ratio":  round(vol_r, 2),
+                "vol_signal": "high" if vol_r > 1.5 else ("low" if vol_r < 0.7 else "normal"),
+            },
+            "levels": {
+                "support_20d":    round(_swing_low(low, 20),   2),
+                "resistance_20d": round(_swing_high(high, 20), 2),
+                "support_60d":    round(_swing_low(low, 60),   2),
+                "resistance_60d": round(_swing_high(high, 60), 2),
+                "fibonacci":      fib,
+                "nearest_fib":    {"level": nearest_fib[1], "price": nearest_fib[0]},
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
+
+
 # ─── Routes: trading tips ─────────────────────────────────────────────────────
 
 @app.get("/api/tips/{symbol}")
@@ -420,10 +688,14 @@ async def trading_tips(
         low    = df["low"]
         volume = df.get("volume", pd.Series(dtype=float))
 
-        ema20  = float(_ema(close, 20).iloc[-1])
-        ema50  = float(_ema(close, 50).iloc[-1])
-        ema200 = float(_ema(close, 200).iloc[-1])
-        rsi14  = float(_rsi(close, 14).iloc[-1])
+        ema20_s = _ema(close, 20)
+        ema50_s = _ema(close, 50)
+        ema200_s= _ema(close, 200)
+        ema20  = float(ema20_s.iloc[-1])
+        ema50  = float(ema50_s.iloc[-1])
+        ema200 = float(ema200_s.iloc[-1])
+        rsi_s  = _rsi(close, 14)
+        rsi14  = float(rsi_s.iloc[-1])
         _ml, _ms, _mh = _macd(close)
         macd_hist = float(_mh.iloc[-1])
         macd_prev = float(_mh.iloc[-2])
@@ -435,6 +707,19 @@ async def trading_tips(
         swing_lo60 = _swing_low(low, 60)
         vol_r  = _vol_ratio(volume, 20) if not volume.empty else 1.0
         price  = float(close.iloc[-1])
+        # New indicators
+        stoch_k_s, stoch_d_s = _stochastic(high, low, close)
+        stoch_k = float(stoch_k_s.iloc[-1])
+        stoch_d = float(stoch_d_s.iloc[-1])
+        obv_s   = _obv(close, volume)
+        obv_rising = not volume.empty and float(obv_s.iloc[-1]) > float(obv_s.iloc[-20])
+        cross   = _golden_death_cross(ema50_s, ema200_s)
+        rsi_div = _rsi_divergence(close, rsi_s)
+        # Fibonacci (52-week)
+        bars_1y = min(252, len(high))
+        fib_hi  = float(high.iloc[-bars_1y:].max())
+        fib_lo  = float(low.iloc[-bars_1y:].min())
+        fib     = _fibonacci_levels(fib_hi, fib_lo)
 
         # VIX from parallel result
         try:
@@ -490,23 +775,37 @@ async def trading_tips(
                 if reason:
                     rationale.append(reason)
 
-        _sig("EMA Bullish Stack (20>50>200)", ema20 > ema50 > ema200, 25,
+        _sig("EMA Bullish Stack (20>50>200)", ema20 > ema50 > ema200, 20,
              f"EMAs aligned bullishly: {ema20:.2f} > {ema50:.2f} > {ema200:.2f}")
         _sig("Price Above EMA200",            price > ema200,          10,
              f"Price {price:.2f} above 200-EMA {ema200:.2f}")
-        _sig("RSI in Sweet Spot (45-70)",     45 <= rsi14 <= 70,       15,
+        _sig("RSI Sweet Spot (45-70)",        45 <= rsi14 <= 70,       12,
              f"RSI {rsi14:.1f} in momentum zone")
-        _sig("MACD Bullish Crossover",        macd_hist > 0 > macd_prev, 20,
+        _sig("MACD Bullish Crossover",        macd_hist > 0 > macd_prev, 15,
              "MACD histogram just turned positive — momentum shift")
-        _sig("High Relative Volume",          vol_r > 1.5,              10,
+        _sig("High Relative Volume",          vol_r > 1.5,              8,
              f"Volume {vol_r:.1f}× above 20-day average")
-        _sig("BB Not Overbought (%B < 0.85)", bb_val < 0.85,            10,
+        _sig("BB Not Overbought (%B < 0.85)", bb_val < 0.85,            8,
              f"Bollinger %B at {bb_val:.2f} — room to run")
-        _sig("Near Swing Support",            price <= swing_lo20 * 1.03, 10,
+        _sig("Near Swing Support",            price <= swing_lo20 * 1.03, 8,
              f"Price within 3% of 20-day swing low {swing_lo20:.2f}")
+        _sig("Stochastic Not Overbought",     stoch_k < 80,             7,
+             f"Stochastic %K {stoch_k:.0f} not overbought")
+        _sig("OBV Confirming Trend",          obv_rising,               7,
+             "On-Balance Volume rising — volume confirms price trend")
+        _sig("Golden Cross (50>200 EMA)",     cross in ("golden_cross", "above_200"), 10,
+             f"EMA cross status: {cross.replace('_',' ')}")
+        _sig("Bullish RSI Divergence",        rsi_div == "bullish",      10,
+             "Bullish RSI divergence — price weakness not confirmed by momentum")
         if rsi14 > 75:
             score -= 15
             rationale.append(f"RSI {rsi14:.1f} overbought — caution")
+        if rsi_div == "bearish":
+            score -= 10
+            rationale.append("Bearish RSI divergence — momentum weakening")
+        if cross == "death_cross":
+            score -= 15
+            rationale.append("Death cross (50 EMA below 200 EMA) — bearish long-term signal")
         if vix > 25:
             score -= 10
             rationale.append(f"Elevated VIX {vix:.1f} increases risk")
@@ -561,16 +860,22 @@ async def trading_tips(
             "signals":   signals,
             "rationale": rationale if rationale else ["No strong directional signal at this time"],
             "technicals": {
-                "close":     round(price,     2),
-                "ema20":     round(ema20,     2),
-                "ema50":     round(ema50,     2),
-                "ema200":    round(ema200,    2),
-                "rsi14":     round(rsi14,     1),
-                "atr14":     round(atr14,     4),
-                "macd_hist": round(macd_hist, 4),
-                "vol_ratio": round(vol_r,     2),
-                "vix":       round(vix,       1),
-                "bb_pct_b":  round(bb_val,    3),
+                "close":        round(price,     2),
+                "ema20":        round(ema20,     2),
+                "ema50":        round(ema50,     2),
+                "ema200":       round(ema200,    2),
+                "rsi14":        round(rsi14,     1),
+                "atr14":        round(atr14,     4),
+                "macd_hist":    round(macd_hist, 4),
+                "vol_ratio":    round(vol_r,     2),
+                "vix":          round(vix,       1),
+                "bb_pct_b":     round(bb_val,    3),
+                "stoch_k":      round(stoch_k,   1),
+                "stoch_d":      round(stoch_d,   1),
+                "obv_trend":    "rising" if obv_rising else "falling",
+                "ema_cross":    cross,
+                "rsi_divergence": rsi_div,
+                "fibonacci":    fib,
             },
         }
     except Exception as exc:

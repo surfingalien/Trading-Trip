@@ -3247,37 +3247,56 @@ const TradingTipsView = ({ portfolio }) => {
       )}
 
       {tip && (
-        <div className="space-y-4">
+        <div className="space-y-4 fade-in">
           {/* Signal header */}
           <div className="rounded-xl border p-5" style={{ background: C.surface2, borderColor: C.border }}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-2xl font-mono font-bold" style={{ color: C.text }}>{tip.symbol}</span>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                    style={{ background: (signalColors[tip.signal_type] || C.textDim) + '20', color: signalColors[tip.signal_type] || C.textDim }}>
-                    {signalLabels[tip.signal_type] || tip.signal_type}
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="text-2xl font-mono font-bold" style={{ color: C.gold }}>{tip.symbol}</span>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold tracking-wide"
+                    style={{ background: (signalColors[tip.signal] || C.textDim) + '20', color: signalColors[tip.signal] || C.textDim }}>
+                    {signalLabels[tip.signal] || tip.signal}
                   </span>
+                  {tip.technicals?.ema_cross === 'golden_cross' && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: C.gold + '25', color: C.gold }}>✦ GOLDEN X</span>
+                  )}
+                  {tip.technicals?.ema_cross === 'death_cross' && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: C.neg + '25', color: C.neg }}>✕ DEATH X</span>
+                  )}
                 </div>
-                <p className="text-sm" style={{ color: C.textDim }}>{tip.regime_note}</p>
+                <p className="text-xs" style={{ color: C.textDim }}>VIX {tip.technicals?.vix?.toFixed(1)} · ATR {tip.technicals?.atr14?.toFixed(2)} · Generated {new Date(tip.generated_at).toLocaleTimeString()}</p>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-xs mb-1" style={{ color: C.textDim }}>Confidence</div>
-                <div className="text-3xl font-serif font-bold" style={{ color: signalColors[tip.signal_type] || C.text }}>
-                  {tip.confidence?.toFixed(0)}%
-                </div>
+                <div className="text-xs mb-1" style={{ color: C.textDim }}>Signal Score</div>
+                <div className="text-3xl font-serif font-bold" style={{ color: signalColors[tip.signal] || C.text }}>{tip.score}</div>
+                <div className="text-xs" style={{ color: C.textFaint }}>/100</div>
               </div>
             </div>
-
-            {/* Confidence bar */}
-            <div className="mt-3 h-1.5 rounded-full" style={{ background: C.surface3 }}>
-              <div className="h-full rounded-full transition-all" style={{ width: `${tip.confidence}%`, background: signalColors[tip.signal_type] || C.gold }} />
+            <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: C.surface3 }}>
+              <div className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${tip.score}%`, background: signalColors[tip.signal] || C.gold }} />
             </div>
           </div>
 
-          {/* Trade plan grid */}
+          {/* Signals checklist */}
+          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+            <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Signal Checklist</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {tip.signals?.map(s => (
+                <div key={s.label} className="flex items-center gap-2 text-xs">
+                  <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: s.active ? C.pos + '25' : C.surface3 }}>
+                    <span style={{ color: s.active ? C.pos : C.textFaint, fontSize: 9 }}>{s.active ? '✓' : '○'}</span>
+                  </div>
+                  <span style={{ color: s.active ? C.text : C.textFaint }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Trade plan */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Entry */}
             <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.info + '20' }}>
@@ -3285,143 +3304,143 @@ const TradingTipsView = ({ portfolio }) => {
                 </div>
                 <span className="text-sm font-semibold" style={{ color: C.text }}>Entry Zone</span>
               </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span style={{ color: C.textDim }}>Low</span>
-                  <span className="font-mono font-semibold" style={{ color: C.text }}>${tip.entry_low?.toFixed(2)}</span>
+              {[
+                ['Low',     fmt.dollar(tip.entry_zone?.low),      C.text],
+                ['Current',fmt.dollar(tip.entry_zone?.midpoint),  C.gold],
+                ['High',   fmt.dollar(tip.entry_zone?.high),      C.text],
+              ].map(([l, v, col]) => (
+                <div key={l} className="flex justify-between text-xs py-0.5">
+                  <span style={{ color: C.textDim }}>{l}</span>
+                  <span className="font-mono font-semibold" style={{ color: col }}>{v}</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span style={{ color: C.textDim }}>High</span>
-                  <span className="font-mono font-semibold" style={{ color: C.text }}>${tip.entry_high?.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span style={{ color: C.textDim }}>Current</span>
-                  <span className="font-mono font-semibold" style={{ color: C.gold }}>${tip.technicals?.price?.toFixed(2)}</span>
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* Stop-loss */}
             <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.neg + '20' }}>
                   <Shield size={13} style={{ color: C.neg }} />
                 </div>
                 <span className="text-sm font-semibold" style={{ color: C.text }}>Stop-Loss</span>
+                <span className="text-[10px] ml-auto uppercase tracking-wide px-1.5 py-0.5 rounded"
+                  style={{ background: C.surface3, color: C.textFaint }}>{tip.stop_loss?.method}</span>
               </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span style={{ color: C.textDim }}>{tip.stop_loss?.method?.toUpperCase()} Stop</span>
-                  <span className="font-mono font-semibold" style={{ color: C.neg }}>${tip.stop_loss?.stop_loss?.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span style={{ color: C.textDim }}>ATR({tip.stop_loss?.atr_multiple}×)</span>
-                  <span className="font-mono" style={{ color: C.textDim }}>${tip.stop_loss?.atr_stop?.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span style={{ color: C.textDim }}>Structural</span>
-                  <span className="font-mono" style={{ color: C.textDim }}>${tip.stop_loss?.structural_stop?.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Targets */}
-            {tip.targets ? (
-              <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.pos + '20' }}>
-                    <TrendingUp size={13} style={{ color: C.pos }} />
-                  </div>
-                  <span className="text-sm font-semibold" style={{ color: C.text }}>Take-Profit</span>
-                  <span className="text-xs ml-auto font-mono" style={{ color: C.gold }}>R:R {tip.targets.rr_ratio}:1</span>
-                </div>
-                <div className="space-y-1.5">
-                  {['tp1', 'tp2', 'tp3'].map(tp => (
-                    <div key={tp} className="flex justify-between text-xs">
-                      <span style={{ color: C.textDim }}>TP{tp[2]} ({tip.targets[tp + '_r']})</span>
-                      <span className="font-mono font-semibold" style={{ color: C.pos }}>${tip.targets[tp]?.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border p-4 flex items-center justify-center" style={{ background: C.surface, borderColor: C.border }}>
-                <p className="text-xs text-center" style={{ color: C.textDim }}>R:R &lt; 1:2 — trade plan rejected.<br />Waiting for better entry point.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Position sizing */}
-          {tip.position_size && (
-            <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
-              <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Position Sizing</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: 'Shares', val: tip.position_size.shares?.toFixed(2) },
-                  { label: 'Position Value', val: `$${tip.position_size.position_value?.toLocaleString()}` },
-                  { label: 'Allocation', val: `${tip.position_size.position_pct?.toFixed(1)}%` },
-                  { label: 'Max $ Risk', val: `$${tip.position_size.dollar_risk?.toLocaleString()}` },
-                ].map(({ label, val }) => (
-                  <div key={label}>
-                    <p className="text-xs mb-0.5" style={{ color: C.textDim }}>{label}</p>
-                    <p className="font-mono font-semibold" style={{ color: C.text }}>{val}</p>
-                  </div>
-                ))}
-              </div>
-              {tip.position_size.capped_by_allocation && (
-                <p className="mt-2 text-xs" style={{ color: C.gold }}>Position capped at 5% allocation limit.</p>
-              )}
-            </div>
-          )}
-
-          {/* Rationale */}
-          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
-            <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Signal Rationale</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-medium mb-2 uppercase tracking-wider" style={{ color: C.textFaint }}>Technical</p>
-                <ul className="space-y-1">
-                  {tip.rationale?.technical?.map((r, i) => (
-                    <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: C.textDim }}>
-                      <span style={{ color: C.gold }}>·</span>{r}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-xs font-medium mb-2 uppercase tracking-wider" style={{ color: C.textFaint }}>Risk &amp; Sizing</p>
-                <ul className="space-y-1">
-                  {[...tip.rationale?.risk || [], ...tip.rationale?.sizing || []].map((r, i) => (
-                    <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: C.textDim }}>
-                      <span style={{ color: C.info }}>·</span>{r}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* Technicals grid */}
-          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
-            <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Technical Snapshot</p>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
               {[
-                { label: 'RSI(14)', val: tip.technicals?.rsi14?.toFixed(1), color: tip.technicals?.rsi14 > 70 ? C.neg : tip.technicals?.rsi14 < 30 ? C.pos : C.text },
-                { label: 'EMA 20', val: `$${tip.technicals?.ema20?.toFixed(2)}`, color: C.text },
-                { label: 'EMA 50', val: `$${tip.technicals?.ema50?.toFixed(2)}`, color: C.text },
-                { label: 'ATR(14)', val: `$${tip.technicals?.atr14?.toFixed(2)}`, color: C.text },
-                { label: 'Vol Ratio', val: `${tip.technicals?.volume_ratio?.toFixed(2)}×`, color: tip.technicals?.volume_ratio > 1.5 ? C.pos : C.text },
-                { label: 'VIX', val: tip.technicals?.vix?.toFixed(1), color: tip.technicals?.vix > 25 ? C.neg : C.text },
-              ].map(({ label, val, color }) => (
-                <div key={label} className="text-center">
-                  <p className="text-[10px] mb-1" style={{ color: C.textFaint }}>{label}</p>
-                  <p className="font-mono text-sm font-semibold" style={{ color }}>{val}</p>
+                ['Stop',       fmt.dollar(tip.stop_loss?.stop_loss),       C.neg],
+                ['ATR Stop',   fmt.dollar(tip.stop_loss?.atr_stop),        C.textDim],
+                ['Structural', fmt.dollar(tip.stop_loss?.structural_stop), C.textDim],
+              ].map(([l, v, col]) => (
+                <div key={l} className="flex justify-between text-xs py-0.5">
+                  <span style={{ color: C.textDim }}>{l}</span>
+                  <span className="font-mono font-semibold" style={{ color: col }}>{v}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.pos + '20' }}>
+                  <TrendingUp size={13} style={{ color: C.pos }} />
+                </div>
+                <span className="text-sm font-semibold" style={{ color: C.text }}>Take-Profit</span>
+                <span className="text-xs ml-auto font-mono" style={{ color: C.gold }}>R:R {tip.targets?.rr_ratio}:1</span>
+              </div>
+              {[
+                ['TP1 (+1R)', fmt.dollar(tip.targets?.tp1)],
+                ['TP2 (+2R)', fmt.dollar(tip.targets?.tp2)],
+                ['TP3 (+3R)', fmt.dollar(tip.targets?.tp3)],
+              ].map(([l, v]) => (
+                <div key={l} className="flex justify-between text-xs py-0.5">
+                  <span style={{ color: C.textDim }}>{l}</span>
+                  <span className="font-mono font-semibold" style={{ color: C.pos }}>{v}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-xs" style={{ color: C.textFaint }}>{tip.disclaimer}</p>
+          {/* Position size + rationale */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+              <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Position Sizing (1% Risk)</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['Shares',     tip.position_size?.shares],
+                  ['Value',      fmt.dollar(tip.position_size?.dollar_value, 0)],
+                  ['Allocation', `${tip.position_size?.position_pct?.toFixed(1)}%`],
+                  ['$ at Risk',  fmt.dollar(tip.position_size?.dollar_risk, 0)],
+                ].map(([l, v]) => (
+                  <div key={l}>
+                    <p className="text-xs mb-0.5" style={{ color: C.textDim }}>{l}</p>
+                    <p className="font-mono font-semibold text-sm" style={{ color: C.text }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+              {tip.position_size?.capped_by_allocation && (
+                <p className="mt-2 text-xs" style={{ color: C.gold }}>⚠ Capped at 5% allocation max</p>
+              )}
+              <div className="mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
+                <p className="text-xs mb-1" style={{ color: C.textDim }}>Trailing Stop activates at {fmt.dollar(tip.trailing_stop?.activation_price)}</p>
+                <p className="text-xs" style={{ color: C.textFaint }}>{tip.trailing_stop?.rule}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+              <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Rationale</p>
+              <ul className="space-y-1.5">
+                {(tip.rationale || []).map((r, i) => (
+                  <li key={i} className="text-xs flex items-start gap-2" style={{ color: C.textDim }}>
+                    <span className="mt-0.5 shrink-0" style={{ color: C.gold }}>›</span>{r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Full technical dashboard */}
+          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+            <p className="text-sm font-semibold mb-4" style={{ color: C.text }}>Technical Dashboard</p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {[
+                { label: 'RSI(14)',    val: tip.technicals?.rsi14?.toFixed(1),   color: tip.technicals?.rsi14 > 70 ? C.neg : tip.technicals?.rsi14 < 30 ? C.pos : C.text },
+                { label: 'Stoch %K',  val: tip.technicals?.stoch_k?.toFixed(0), color: tip.technicals?.stoch_k > 80 ? C.neg : tip.technicals?.stoch_k < 20 ? C.pos : C.text },
+                { label: 'MACD Hist', val: tip.technicals?.macd_hist?.toFixed(3),color: tip.technicals?.macd_hist > 0 ? C.pos : C.neg },
+                { label: 'BB %B',     val: tip.technicals?.bb_pct_b?.toFixed(2), color: tip.technicals?.bb_pct_b > 0.85 ? C.neg : C.text },
+                { label: 'Vol Ratio', val: `${tip.technicals?.vol_ratio?.toFixed(2)}×`, color: tip.technicals?.vol_ratio > 1.5 ? C.pos : C.text },
+                { label: 'VIX',       val: tip.technicals?.vix?.toFixed(1),      color: tip.technicals?.vix > 25 ? C.neg : tip.technicals?.vix < 15 ? C.pos : C.text },
+                { label: 'EMA 20',    val: fmt.dollar(tip.technicals?.ema20),    color: C.text },
+                { label: 'EMA 50',    val: fmt.dollar(tip.technicals?.ema50),    color: C.text },
+                { label: 'EMA 200',   val: fmt.dollar(tip.technicals?.ema200),   color: C.text },
+                { label: 'ATR(14)',   val: fmt.dollar(tip.technicals?.atr14),    color: C.text },
+                { label: 'OBV',       val: tip.technicals?.obv_trend === 'rising' ? '↑ Rising' : '↓ Falling', color: tip.technicals?.obv_trend === 'rising' ? C.pos : C.neg },
+                { label: 'RSI Div',   val: tip.technicals?.rsi_divergence === 'bullish' ? '↑ Bull' : tip.technicals?.rsi_divergence === 'bearish' ? '↓ Bear' : '— None', color: tip.technicals?.rsi_divergence === 'bullish' ? C.pos : tip.technicals?.rsi_divergence === 'bearish' ? C.neg : C.textFaint },
+              ].map(({ label, val, color }) => (
+                <div key={label} className="rounded-lg p-2.5 text-center" style={{ background: C.surface2 }}>
+                  <p className="text-[9px] mb-1 uppercase tracking-wide" style={{ color: C.textFaint }}>{label}</p>
+                  <p className="font-mono text-xs font-bold" style={{ color }}>{val}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Fibonacci levels */}
+            {tip.technicals?.fibonacci && (
+              <div className="mt-4 pt-3 border-t" style={{ borderColor: C.border }}>
+                <p className="text-xs font-medium mb-2" style={{ color: C.textDim }}>Fibonacci Levels (52-week range)</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(tip.technicals.fibonacci).map(([pct, price]) => {
+                    const isNear = Math.abs(price - tip.technicals.close) / tip.technicals.close < 0.02;
+                    return (
+                      <div key={pct} className="rounded px-2 py-1 text-center" style={{ background: isNear ? C.gold + '20' : C.surface2, border: `1px solid ${isNear ? C.gold : C.border}` }}>
+                        <div className="text-[9px]" style={{ color: isNear ? C.gold : C.textFaint }}>{pct}%</div>
+                        <div className="font-mono text-[10px] font-bold" style={{ color: isNear ? C.gold : C.textDim }}>{fmt.dollar(price)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs" style={{ color: C.textFaint }}>Not financial advice · Statistical model · {tip.generated_at?.slice(0,10)}</p>
         </div>
       )}
     </div>
@@ -3666,22 +3685,29 @@ const StockSearchView = ({ onAddToWatchlist, onAddToPortfolio, watchlist }) => {
   const [selected, setSelected] = useState(null);
   const [quote, setQuote] = useState(null);
   const [history, setHistory] = useState([]);
+  const [fundamentals, setFundamentals] = useState(null);
+  const [technicals, setTechnicals] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
 
   const loadStock = useCallback(async (item) => {
-    setSelected(item);
-    setQuote(null); setHistory([]); setError(null); setWarmingUp(false);
+    setSelected(item); setActiveTab('overview');
+    setQuote(null); setHistory([]); setFundamentals(null); setTechnicals(null);
+    setError(null); setWarmingUp(false);
     setLoadingQuote(true);
     try {
-      const [q, h] = await Promise.all([
+      const [q, h, f, ta] = await Promise.all([
         apiFetch(`/api/quotes?symbols=${item.symbol}`, {}, { onWarmup: () => setWarmingUp(true) }),
-        apiFetch(`/api/history/${item.symbol}?period=1mo`, {}, { onWarmup: () => {} }).catch(() => ({ bars: [] })),
+        apiFetch(`/api/history/${item.symbol}?period=3mo`, {}, { onWarmup: () => {} }).catch(() => ({ bars: [] })),
+        apiFetch(`/api/fundamentals/${item.symbol}`, {}, { onWarmup: () => {} }).catch(() => null),
+        apiFetch(`/api/technicals/${item.symbol}?period=6mo`, {}, { onWarmup: () => {} }).catch(() => null),
       ]);
-      // quotes returns an array
       setQuote(Array.isArray(q) ? q.find(x => x.symbol === item.symbol) ?? q[0] ?? null : q);
       setHistory(h?.bars || []);
+      setFundamentals(f);
+      setTechnicals(ta);
     } catch (e) {
       setError(e.isWarmup ? 'Server waking up — please try again in a moment.' : e.message);
     } finally { setLoadingQuote(false); setWarmingUp(false); }
@@ -3777,100 +3803,267 @@ const StockSearchView = ({ onAddToWatchlist, onAddToPortfolio, watchlist }) => {
 
           {quote && (
             <>
-              {/* Price row */}
+              {/* Price hero */}
               <div className="rounded-xl border p-5 flex items-start justify-between"
                 style={{ background: C.surface2, borderColor: C.border }}>
                 <div>
-                  <div className="text-3xl font-mono font-bold" style={{ color: C.text }}>
-                    {fmt.dollar(quote.price ?? quote.regularMarketPrice)}
-                  </div>
+                  <p className="text-xs mb-1" style={{ color: C.textDim }}>{fundamentals?.name || selected.name || selected.symbol}</p>
+                  <div className="text-3xl font-mono font-bold" style={{ color: C.text }}>{fmt.dollar(quote.price)}</div>
                   <div className="flex items-center gap-2 mt-1">
                     {isUp ? <TrendingUp size={14} style={{ color: C.pos }} /> : <TrendingDown size={14} style={{ color: C.neg }} />}
                     <span className="text-sm font-medium" style={{ color: isUp ? C.pos : C.neg }}>
-                      {fmt.pct(changePct)} ({fmt.dollar(Math.abs(priceChange))})
+                      {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% ({fmt.dollar(Math.abs(priceChange))})
                     </span>
                     <span className="text-xs" style={{ color: C.textFaint }}>today</span>
+                    {technicals?.outlook && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
+                        style={{ background: technicals.outlook === 'bullish' ? C.pos + '20' : technicals.outlook === 'bearish' ? C.neg + '20' : C.gold + '20',
+                                 color: technicals.outlook === 'bullish' ? C.pos : technicals.outlook === 'bearish' ? C.neg : C.gold }}>
+                        {technicals.tech_score}/100 {technicals.outlook?.toUpperCase()}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => { onAddToWatchlist(selected.symbol); }}
-                    disabled={inWatchlist}
-                    className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors"
+                <div className="flex flex-col gap-2 shrink-0">
+                  <button onClick={() => onAddToWatchlist(selected.symbol)} disabled={inWatchlist}
+                    className="text-xs px-3 py-1.5 rounded-lg border font-medium"
                     style={{ borderColor: inWatchlist ? C.textFaint : C.gold, color: inWatchlist ? C.textFaint : C.gold }}>
-                    {inWatchlist ? '✓ In Watchlist' : '+ Watchlist'}
+                    {inWatchlist ? '✓ Watchlist' : '+ Watchlist'}
                   </button>
-                  <button
-                    onClick={() => onAddToPortfolio(selected.symbol)}
+                  <button onClick={() => onAddToPortfolio(selected.symbol)}
                     className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                    style={{ background: C.gold, color: C.ink }}>
-                    + Portfolio
-                  </button>
+                    style={{ background: C.gold, color: C.ink }}>+ Portfolio</button>
                 </div>
               </div>
 
-              {/* Key stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: 'Price',     val: fmt.dollar(quote.price) },
-                  { label: 'Change',    val: `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%` },
-                  { label: 'Volume',    val: fmt.big$(quote.volume)?.replace('$', '') },
-                  { label: 'Mkt Cap',   val: fmt.big$(quote.market_cap) },
-                  { label: '52W High',  val: fmt.dollar(quote.fifty_two_week_high) },
-                  { label: '52W Low',   val: fmt.dollar(quote.fifty_two_week_low) },
-                  { label: 'Sector',    val: selected.sector || '—' },
-                  { label: 'Exchange',  val: selected.exchange || '—' },
-                ].map(({ label, val }) => (
-                  <div key={label} className="rounded-lg border p-3" style={{ background: C.surface2, borderColor: C.border }}>
-                    <div className="text-xs mb-1" style={{ color: C.textDim }}>{label}</div>
-                    <div className="font-mono text-sm font-semibold" style={{ color: C.text }}>{val ?? '—'}</div>
-                  </div>
+              {/* Tabs */}
+              <div className="flex gap-1 p-1 rounded-xl" style={{ background: C.surface2 }}>
+                {[['overview','Overview'],['fundamentals','Fundamentals'],['technicals','Technical Analysis']].map(([id,label]) => (
+                  <button key={id} onClick={() => setActiveTab(id)}
+                    className="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors"
+                    style={{ background: activeTab === id ? C.gold : 'transparent',
+                             color: activeTab === id ? C.ink : C.textDim }}>
+                    {label}
+                  </button>
                 ))}
               </div>
 
-              {/* Mini chart */}
-              {chartData.length > 0 && (
-                <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
-                  <p className="text-xs font-medium mb-3" style={{ color: C.textDim }}>30-Day Price</p>
-                  <ResponsiveContainer width="100%" height={140}>
-                    <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                      <defs>
-                        <linearGradient id="ssvGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={isUp ? C.pos : C.neg} stopOpacity={0.3} />
-                          <stop offset="100%" stopColor={isUp ? C.pos : C.neg} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" hide />
-                      <YAxis domain={[chartMin, chartMax]} hide />
-                      <Tooltip
-                        contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}
-                        labelStyle={{ color: C.textDim, fontSize: 11 }}
-                        formatter={v => [fmt.dollar(v), 'Price']}
-                      />
-                      <Area type="monotone" dataKey="price" stroke={isUp ? C.pos : C.neg}
-                        strokeWidth={2} fill="url(#ssvGrad)" dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+              {/* Overview tab */}
+              {activeTab === 'overview' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      ['Mkt Cap',   fmt.big$(quote.market_cap)],
+                      ['52W High',  fmt.dollar(quote.fifty_two_week_high)],
+                      ['52W Low',   fmt.dollar(quote.fifty_two_week_low)],
+                      ['Volume',    fmt.big$(quote.volume)?.replace('$','')],
+                      ['P/E (TTM)', fundamentals?.pe_ratio ? fundamentals.pe_ratio.toFixed(1) : '—'],
+                      ['EPS (TTM)', fundamentals?.eps_ttm ? fmt.dollar(fundamentals.eps_ttm) : '—'],
+                      ['Sector',    fundamentals?.sector || selected.sector || '—'],
+                      ['Beta',      fundamentals?.beta?.toFixed(2) || '—'],
+                    ].map(([l, v]) => (
+                      <div key={l} className="rounded-lg border p-3" style={{ background: C.surface2, borderColor: C.border }}>
+                        <div className="text-xs mb-1" style={{ color: C.textDim }}>{l}</div>
+                        <div className="font-mono text-sm font-semibold" style={{ color: C.text }}>{v ?? '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {chartData.length > 0 && (
+                    <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                      <p className="text-xs font-medium mb-3" style={{ color: C.textDim }}>3-Month Price</p>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                          <defs>
+                            <linearGradient id="ssvGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={isUp ? C.pos : C.neg} stopOpacity={0.3} />
+                              <stop offset="100%" stopColor={isUp ? C.pos : C.neg} stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="date" hide />
+                          <YAxis domain={[chartMin, chartMax]} hide />
+                          <Tooltip contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}
+                            labelStyle={{ color: C.textDim, fontSize: 11 }} formatter={v => [fmt.dollar(v), 'Price']} />
+                          <Area type="monotone" dataKey="price" stroke={isUp ? C.pos : C.neg}
+                            strokeWidth={2} fill="url(#ssvGrad)" dot={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                  {fundamentals?.description && (
+                    <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                      <p className="text-sm font-semibold mb-2" style={{ color: C.text }}>About</p>
+                      <p className="text-xs leading-relaxed" style={{ color: C.textDim }}>{fundamentals.description}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    {[['Trading Tips →','tips'],['ML Forecast →','predict']].map(([label, v]) => (
+                      <button key={v} onClick={() => window.__finsightSetView?.(v, selected.symbol)}
+                        className="flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors"
+                        style={{ borderColor: C.border, color: C.textDim }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.color = C.gold; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* Navigate to analysis */}
-              <div className="flex gap-3">
-                <a href="#" onClick={e => { e.preventDefault(); window.__finsightSetView?.('tips', selected.symbol); }}
-                  className="flex-1 rounded-lg border p-3 text-center text-sm font-medium transition-colors"
-                  style={{ borderColor: C.border, color: C.textDim }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.color = C.gold; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}>
-                  Trading Tips →
-                </a>
-                <a href="#" onClick={e => { e.preventDefault(); window.__finsightSetView?.('predict', selected.symbol); }}
-                  className="flex-1 rounded-lg border p-3 text-center text-sm font-medium transition-colors"
-                  style={{ borderColor: C.border, color: C.textDim }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.color = C.gold; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}>
-                  ML Forecast →
-                </a>
-              </div>
+              {/* Fundamentals tab */}
+              {activeTab === 'fundamentals' && (
+                <div className="space-y-4">
+                  {!fundamentals ? (
+                    <div className="p-4 text-center text-sm" style={{ color: C.textDim }}>Fundamental data unavailable</div>
+                  ) : (
+                    <>
+                      {[
+                        { title: 'Valuation', items: [
+                          ['P/E (TTM)',      fundamentals.pe_ratio?.toFixed(1)],
+                          ['Forward P/E',   fundamentals.forward_pe?.toFixed(1)],
+                          ['PEG Ratio',     fundamentals.peg_ratio?.toFixed(2)],
+                          ['P/S Ratio',     fundamentals.price_to_sales?.toFixed(2)],
+                          ['P/B Ratio',     fundamentals.price_to_book?.toFixed(2)],
+                          ['EV/EBITDA',     fundamentals.ev_to_ebitda?.toFixed(1)],
+                        ]},
+                        { title: 'Profitability', items: [
+                          ['Gross Margin',  fundamentals.gross_margins != null ? `${fundamentals.gross_margins.toFixed(1)}%` : null],
+                          ['Op Margin',     fundamentals.operating_margins != null ? `${fundamentals.operating_margins.toFixed(1)}%` : null],
+                          ['Net Margin',    fundamentals.profit_margins != null ? `${fundamentals.profit_margins.toFixed(1)}%` : null],
+                          ['ROE',           fundamentals.roe != null ? `${fundamentals.roe.toFixed(1)}%` : null],
+                          ['ROA',           fundamentals.roa != null ? `${fundamentals.roa.toFixed(1)}%` : null],
+                          ['Free Cash Flow',fmt.big$(fundamentals.free_cash_flow)],
+                        ]},
+                        { title: 'Growth', items: [
+                          ['Revenue (TTM)',      fmt.big$(fundamentals.revenue_ttm)],
+                          ['Revenue Growth YoY',fundamentals.revenue_growth_yoy != null ? `${fundamentals.revenue_growth_yoy > 0 ? '+' : ''}${fundamentals.revenue_growth_yoy.toFixed(1)}%` : null],
+                          ['Earnings Growth',   fundamentals.earnings_growth_yoy != null ? `${fundamentals.earnings_growth_yoy > 0 ? '+' : ''}${fundamentals.earnings_growth_yoy.toFixed(1)}%` : null],
+                          ['EPS (TTM)',          fmt.dollar(fundamentals.eps_ttm)],
+                          ['EPS (Fwd)',          fmt.dollar(fundamentals.eps_forward)],
+                          ['Dividend Yield',    fundamentals.dividend_yield ? `${fundamentals.dividend_yield.toFixed(2)}%` : 'None'],
+                        ]},
+                        { title: 'Balance Sheet & Risk', items: [
+                          ['Debt/Equity',  fundamentals.debt_to_equity?.toFixed(2)],
+                          ['Current Ratio',fundamentals.current_ratio?.toFixed(2)],
+                          ['Beta',         fundamentals.beta?.toFixed(2)],
+                          ['Short Ratio',  fundamentals.short_ratio?.toFixed(1)],
+                          ['Mkt Cap',      fmt.big$(fundamentals.market_cap)],
+                          ['Avg Volume',   fmt.big$(fundamentals.avg_volume)?.replace('$','')],
+                        ]},
+                      ].map(({ title, items }) => (
+                        <div key={title} className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                          <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>{title}</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {items.map(([l, v]) => (
+                              <div key={l}>
+                                <p className="text-[10px] mb-0.5" style={{ color: C.textFaint }}>{l}</p>
+                                <p className="font-mono text-xs font-semibold" style={{ color: v && v !== '0.00' && v !== '$0.00' ? C.text : C.textFaint }}>{v || '—'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      {/* Analyst consensus */}
+                      {fundamentals.num_analysts > 0 && (
+                        <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                          <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Analyst Consensus ({fundamentals.num_analysts} analysts)</p>
+                          <div className="flex items-center gap-4">
+                            <div className="text-center">
+                              <p className="text-xs mb-1" style={{ color: C.textDim }}>Rating</p>
+                              <p className="font-bold text-sm capitalize" style={{ color: fundamentals.recommendation?.includes('buy') ? C.pos : fundamentals.recommendation?.includes('sell') ? C.neg : C.gold }}>
+                                {fundamentals.recommendation?.replace('_',' ') || '—'}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs mb-1" style={{ color: C.textDim }}>Low Target</p>
+                              <p className="font-mono font-semibold text-sm" style={{ color: C.text }}>{fmt.dollar(fundamentals.analyst_low)}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs mb-1" style={{ color: C.textDim }}>Mean Target</p>
+                              <p className="font-mono font-bold text-lg" style={{ color: C.gold }}>{fmt.dollar(fundamentals.analyst_target)}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs mb-1" style={{ color: C.textDim }}>High Target</p>
+                              <p className="font-mono font-semibold text-sm" style={{ color: C.text }}>{fmt.dollar(fundamentals.analyst_high)}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs mb-1" style={{ color: C.textDim }}>Upside</p>
+                              <p className="font-bold text-sm" style={{ color: (fundamentals.analyst_target - quote.price) > 0 ? C.pos : C.neg }}>
+                                {fundamentals.analyst_target && quote.price ? `${(((fundamentals.analyst_target / quote.price) - 1) * 100).toFixed(1)}%` : '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Technicals tab */}
+              {activeTab === 'technicals' && (
+                <div className="space-y-4">
+                  {!technicals ? (
+                    <div className="p-4 text-center text-sm" style={{ color: C.textDim }}>Technical data unavailable</div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[
+                          { label: 'Overall Score', val: `${technicals.tech_score}/100`, color: technicals.tech_score >= 60 ? C.pos : technicals.tech_score < 40 ? C.neg : C.gold },
+                          { label: 'Outlook',       val: technicals.outlook?.toUpperCase(), color: technicals.outlook === 'bullish' ? C.pos : technicals.outlook === 'bearish' ? C.neg : C.gold },
+                          { label: 'EMA Cross',     val: technicals.moving_averages?.cross?.replace(/_/g,' '), color: technicals.moving_averages?.cross?.includes('golden') ? C.pos : technicals.moving_averages?.cross?.includes('death') ? C.neg : C.text },
+                          { label: 'RSI(14)',       val: technicals.momentum?.rsi14?.toFixed(1), color: technicals.momentum?.rsi14 > 70 ? C.neg : technicals.momentum?.rsi14 < 30 ? C.pos : C.text },
+                          { label: 'Stoch %K',      val: technicals.momentum?.stoch_k?.toFixed(0), color: technicals.momentum?.stoch_k > 80 ? C.neg : technicals.momentum?.stoch_k < 20 ? C.pos : C.text },
+                          { label: 'MACD',          val: technicals.momentum?.macd_hist?.toFixed(3), color: technicals.momentum?.macd_hist > 0 ? C.pos : C.neg },
+                          { label: 'BB %B',         val: technicals.volatility?.bb_pct_b?.toFixed(2), color: C.text },
+                          { label: 'OBV Trend',     val: technicals.volume?.obv_trend?.toUpperCase(), color: technicals.volume?.obv_trend === 'rising' ? C.pos : C.neg },
+                          { label: 'RSI Divergence',val: technicals.momentum?.rsi_divergence?.toUpperCase(), color: technicals.momentum?.rsi_divergence === 'bullish' ? C.pos : technicals.momentum?.rsi_divergence === 'bearish' ? C.neg : C.textFaint },
+                        ].map(({ label, val, color }) => (
+                          <div key={label} className="rounded-lg border p-3" style={{ background: C.surface2, borderColor: C.border }}>
+                            <p className="text-[10px] mb-1" style={{ color: C.textFaint }}>{label}</p>
+                            <p className="font-mono text-sm font-bold" style={{ color }}>{val || '—'}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Levels */}
+                      <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                        <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Support & Resistance</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            ['Support 20d',    fmt.dollar(technicals.levels?.support_20d)],
+                            ['Resistance 20d', fmt.dollar(technicals.levels?.resistance_20d)],
+                            ['Support 60d',    fmt.dollar(technicals.levels?.support_60d)],
+                            ['Resistance 60d', fmt.dollar(technicals.levels?.resistance_60d)],
+                          ].map(([l, v]) => (
+                            <div key={l}>
+                              <p className="text-[10px] mb-0.5" style={{ color: C.textFaint }}>{l}</p>
+                              <p className="font-mono text-sm font-semibold" style={{ color: C.text }}>{v}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Fibonacci */}
+                      {technicals.levels?.fibonacci && (
+                        <div className="rounded-xl border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                          <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Fibonacci Retracement (52-week)</p>
+                          <p className="text-xs mb-2" style={{ color: C.textDim }}>Nearest: <span style={{ color: C.gold }}>{technicals.levels.nearest_fib?.level}% — {fmt.dollar(technicals.levels.nearest_fib?.price)}</span></p>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(technicals.levels.fibonacci).map(([pct, price]) => {
+                              const isNear = Math.abs(price - technicals.price) / technicals.price < 0.02;
+                              return (
+                                <div key={pct} className="rounded px-2.5 py-1.5 text-center"
+                                  style={{ background: isNear ? C.gold + '20' : C.surface, border: `1px solid ${isNear ? C.gold : C.border}` }}>
+                                  <div className="text-[9px]" style={{ color: isNear ? C.gold : C.textFaint }}>{pct}%</div>
+                                  <div className="font-mono text-[10px] font-bold" style={{ color: isNear ? C.gold : C.textDim }}>{fmt.dollar(price)}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
