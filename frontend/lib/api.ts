@@ -8,32 +8,34 @@ export const API_BASE =
 export const WS_BASE =
   process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8001';
 
+const TIMEOUT = 5000;
+
 export async function fetchPrices(symbols: string[]) {
-  const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`);
+  const res = await fetch(`${API_BASE}/api/prices?symbols=${symbols.join(',')}`, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error('prices fetch failed');
   return res.json();
 }
 
 export async function fetchSnapshot() {
-  const res = await fetch(`${API_BASE}/api/snapshot`);
+  const res = await fetch(`${API_BASE}/api/snapshot`, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error('snapshot fetch failed');
   return res.json();
 }
 
 export async function fetchBacktest(symbol: string, strategy = 'rsi', period = '1y') {
-  const res = await fetch(`${API_BASE}/api/backtest/${symbol}?strategy=${strategy}&period=${period}`);
+  const res = await fetch(`${API_BASE}/api/backtest/${symbol}?strategy=${strategy}&period=${period}`, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error('backtest fetch failed');
   return res.json();
 }
 
 export async function fetchCryptoOverview(limit = 10) {
-  const res = await fetch(`${API_BASE}/api/crypto/overview?limit=${limit}`);
+  const res = await fetch(`${API_BASE}/api/crypto/overview?limit=${limit}`, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error('crypto overview fetch failed');
   return res.json();
 }
 
 export async function fetchCryptoResearch(period = '1y') {
-  const res = await fetch(`${API_BASE}/api/crypto/research?period=${period}`);
+  const res = await fetch(`${API_BASE}/api/crypto/research?period=${period}`, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error('crypto research fetch failed');
   return res.json();
 }

@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Dark-mode system fixes (Web Interface Guidelines) ──────────────────── */
+:root { color-scheme: dark; }
+
+/* ── CSS custom properties ───────────────────────────────────────────────── */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -21,12 +25,20 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --input: 214.3 31.4% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+
+    /* FinSurfing brand tokens */
+    --fs-emerald: 160 84% 39%;
+    --fs-teal: 180 72% 42%;
+    --fs-cyan: 190 80% 52%;
+    --glow-emerald: 0 0 24px rgba(52, 211, 153, 0.35);
+    --glow-cyan:    0 0 24px rgba(34, 211, 238, 0.25);
   }
 
   .dark {
+    color-scheme: dark;
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
     --card: 222.2 84% 4.9%;
@@ -50,10 +62,125 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
+    /* Prevent double-tap zoom delay on touch */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    /* Global tabular nums for financial data */
+    font-variant-numeric: tabular-nums;
   }
+  /* Pretty heading wrapping */
+  h1, h2, h3, h4 { text-wrap: balance; }
 }
+
+/* ── Ticker strip ────────────────────────────────────────────────────────── */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 40s linear infinite;
+}
+.ticker-track:hover { animation-play-state: paused; }
+
+/* ── Sparkline SVG ───────────────────────────────────────────────────────── */
+.sparkline-up   { stroke: #34d399; }
+.sparkline-down { stroke: #f87171; }
+
+/* ── Card glow on hover ──────────────────────────────────────────────────── */
+.card-glow {
+  transition: box-shadow 0.4s ease, transform 0.25s ease;
+}
+.card-glow:hover {
+  box-shadow: var(--glow-emerald);
+  transform: translateY(-1px);
+}
+
+/* ── Glass card ─────────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(17, 24, 39, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Gradient border cards ───────────────────────────────────────────────── */
+.grad-border {
+  position: relative;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(52,211,153,0.08), rgba(34,211,238,0.04));
+}
+.grad-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(52,211,153,0.4), rgba(34,211,238,0.2), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── RSI gauge ───────────────────────────────────────────────────────────── */
+.rsi-bar-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, #34d399 0%, #fbbf24 45%, #f87171 100%);
+  position: relative;
+  overflow: visible;
+}
+.rsi-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: white;
+  border: 2px solid #111827;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(255,255,255,0.6);
+  transition: left 0.5s ease;
+}
+
+/* ── MA signal pill ─────────────────────────────────────────────────────── */
+.signal-bull { @apply bg-emerald-900/50 text-emerald-300 border border-emerald-700/50; }
+.signal-bear { @apply bg-red-900/50 text-red-300 border border-red-700/50; }
+.signal-neut { @apply bg-gray-800 text-gray-400 border border-gray-700/50; }
+
+/* ── Pulse dot ───────────────────────────────────────────────────────────── */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+.live-dot {
+  width: 7px; height: 7px;
+  border-radius: 9999px;
+  background: #34d399;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+/* ── Reduced-motion overrides ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track          { animation: none; }
+  .live-dot              { animation: none; }
+  .card-glow             { transition: none; }
+  .rsi-thumb             { transition: none; }
+  *                      { animation-duration: 0.01ms !important;
+                           transition-duration: 0.01ms !important; }
+}
+
+/* ── Focus-visible global ring ───────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(52, 211, 153, 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Number columns ─────────────────────────────────────────────────────── */
+.num { font-variant-numeric: tabular-nums; }
