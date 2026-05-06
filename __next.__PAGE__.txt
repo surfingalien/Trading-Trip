@@ -3,7 +3,7 @@
 3:I[31713,["/Trading-Trip/_next/static/chunks/0jf84cixr0cbb.js","/Trading-Trip/_next/static/chunks/18d99_rfmr98r.js"],"default"]
 6:I[97367,["/Trading-Trip/_next/static/chunks/0jf84cixr0cbb.js"],"OutletBoundary"]
 7:"$Sreact.suspense"
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/Trading-Trip/_next/static/chunks/18d99_rfmr98r.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"A5YBQVSdrWFlFjDuE7rqq"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/Trading-Trip/_next/static/chunks/18d99_rfmr98r.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"gbzooqPuq0rdVGqCO0Dmn"}
 4:{}
 5:"$0:rsc:props:children:0:props:serverProvidedParams:params"
 8:null
