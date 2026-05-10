@@ -423,10 +423,14 @@ def generate_report(symbol: str, include_macro: bool = True, use_cache: bool = T
 
 def get_brain_status() -> dict:
     """Return feature availability for the /api/brain/status endpoint."""
+    active = _claude_active()
     return {
-        "claude_available":  _claude_active(),
+        "claude_available":  active,
         "vader_available":   _SENT_OK,
         "macro_available":   _MACRO_OK,
         "memory_available":  _MEM_OK,
-        "model":             "claude-sonnet-4-5" if _claude_active() else "statistical-fallback",
+        "model":             "claude-sonnet-4-5" if active else "statistical-fallback",
+        "sdk_available":     _ANTHROPIC_SDK_AVAILABLE,
+        "key_set":           bool(_get_api_key()),
+        "deploy_v":          "v2-dynamic",
     }
