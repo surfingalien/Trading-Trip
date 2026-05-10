@@ -1286,6 +1286,185 @@ def portfolio_analysis(symbols: str = Query(...)):
     return results
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# AI BRAIN — autonomous investment intelligence endpoints
+# ═══════════════════════════════════════════════════════════════════════════
+
+try:
+    from api.brain.claude_brain import generate_report as _brain_report, get_brain_status
+    from api.brain.sentiment import fetch_sentiment as _brain_sentiment
+    from api.brain.macro import fetch_macro_context as _brain_macro
+    from api.brain.ml_forecast import xgb_forecast as _brain_forecast
+    from api.brain.portfolio_optimizer import optimize_portfolio as _brain_optimize, compute_correlation_matrix as _brain_corr
+    from api.brain.alerts import scan_alerts as _brain_alerts
+    _BRAIN_AVAILABLE = True
+except ImportError as _brain_err:
+    _BRAIN_AVAILABLE = False
+    import logging as _bl; _bl.getLogger(__name__).warning("AI Brain import failed: %s", _brain_err)
+
+
+def _require_brain():
+    if not _BRAIN_AVAILABLE:
+        raise HTTPException(503, "AI Brain modules not available — check server logs")
+
+
+@app.get("/api/brain/status")
+async def brain_status():
+    """Return which AI Brain features are active."""
+    if not _BRAIN_AVAILABLE:
+        return {
+            "claude_available": False,
+            "vader_available":  False,
+            "macro_available":  False,
+            "memory_available": False,
+            "model":            "unavailable",
+            "brain_available":  False,
+        }
+    result = await _yf_fetch(get_brain_status, timeout=5.0)
+    result["brain_available"] = True
+    return result
+
+
+@app.get("/api/brain/report/{symbol}")
+async def brain_report(
+    symbol: str = Path(...),
+    include_macro: bool = Query(True),
+    use_cache: bool = Query(True),
+):
+    """
+    Generate (or retrieve cached) institutional-grade investment report.
+    Powered by Claude AI when ANTHROPIC_API_KEY is set; statistical fallback otherwise.
+    """
+    _require_brain()
+    sym = symbol.upper()
+    try:
+        report = await _yf_fetch(
+            lambda: generate_report(sym, include_macro=include_macro, use_cache=use_cache),
+            timeout=45.0,
+        )
+        return report
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Brain report failed: {exc}")
+
+
+@app.get("/api/brain/sentiment/{symbol}")
+async def brain_sentiment(symbol: str = Path(...)):
+    """News + VADER sentiment analysis for a symbol."""
+    _require_brain()
+    sym = symbol.upper()
+    try:
+        return await _yf_fetch(lambda: _brain_sentiment(sym), timeout=15.0)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/brain/macro")
+async def brain_macro():
+    """FRED macroeconomic indicators: rates, inflation, unemployment, yield curve."""
+    _require_brain()
+    try:
+        return await _yf_fetch(_brain_macro, timeout=12.0)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/brain/forecast/{symbol}")
+async def brain_forecast(
+    symbol: str = Path(...),
+    horizon: int = Query(7, ge=1, le=90),
+):
+    """XGBoost ML price forecast for 7, 30, or 90 day horizons."""
+    _require_brain()
+    sym = symbol.upper()
+    try:
+        return await _yf_fetch(lambda: _brain_forecast(sym, horizon), timeout=30.0)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+from pydantic import BaseModel as _BaseModel
+
+class _PortfolioOptReq(_BaseModel):
+    symbols: List[str]
+    current_weights: Optional[Dict[str, float]] = None
+    risk_free_rate: float = 0.04
+
+
+@app.post("/api/brain/portfolio/optimize")
+async def brain_portfolio_optimize(req: _PortfolioOptReq):
+    """Mean-Variance / Max-Sharpe portfolio optimizer."""
+    _require_brain()
+    if len(req.symbols) < 2:
+        raise HTTPException(422, "Provide at least 2 symbols")
+    if len(req.symbols) > 20:
+        raise HTTPException(422, "Maximum 20 symbols per optimization request")
+    try:
+        return await _yf_fetch(
+            lambda: _brain_optimize(req.symbols, req.current_weights, req.risk_free_rate),
+            timeout=30.0,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/brain/portfolio/correlations")
+async def brain_correlations(symbols: str = Query(..., description="Comma-separated symbols")):
+    """Correlation matrix for portfolio heatmap."""
+    _require_brain()
+    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
+    if len(sym_list) < 2:
+        raise HTTPException(422, "Provide at least 2 symbols")
+    try:
+        return await _yf_fetch(lambda: _brain_corr(sym_list), timeout=25.0)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/brain/alerts")
+async def brain_alerts(symbols: str = Query(..., description="Comma-separated symbols")):
+    """Scan symbols for real-time alerts: RSI extremes, volume spikes, crosses, divergences."""
+    _require_brain()
+    sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()][:25]
+    if not sym_list:
+        raise HTTPException(422, "Provide at least 1 symbol")
+    try:
+        return await _yf_fetch(lambda: _brain_alerts(sym_list), timeout=40.0)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/brain/forecast-all/{symbol}")
+async def brain_forecast_all(symbol: str = Path(...)):
+    """Return 7, 30, and 90-day XGBoost forecasts in one call."""
+    _require_brain()
+    sym = symbol.upper()
+    try:
+        h7, h30, h90 = await asyncio.gather(
+            _yf_fetch(lambda: _brain_forecast(sym, 7),  timeout=30.0),
+            _yf_fetch(lambda: _brain_forecast(sym, 30), timeout=30.0),
+            _yf_fetch(lambda: _brain_forecast(sym, 90), timeout=30.0),
+        )
+        return {"symbol": sym, "horizons": {"7d": h7, "30d": h30, "90d": h90}}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

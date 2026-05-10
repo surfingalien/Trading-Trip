@@ -1054,18 +1054,38 @@ const SectorBars = ({ data, total }) => {
    SIDEBAR & TOPBAR
    ============================================================ */
 const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
-  const items = [
-    { key: 'dashboard',       label: 'Dashboard',       icon: Home },
-    { key: 'holdings',        label: 'Holdings',        icon: Briefcase },
-    { key: 'watchlist',       label: 'Watchlist',       icon: Eye },
-    { key: 'search',          label: 'Stock Search',    icon: Search },
-    { key: 'recommendations', label: 'Recommendations', icon: Lightbulb },
-    { key: 'retirement',      label: 'Retirement',      icon: PiggyBank },
-    { key: 'analytics',       label: 'Analytics',       icon: BarChart3 },
-    { key: 'tips',            label: 'Trading Tips',    icon: Crosshair,  badge: 'NEW' },
-    { key: 'predict',         label: 'ML Forecast',     icon: Brain,       badge: 'NEW' },
-    { key: 'news',            label: 'News',            icon: Newspaper },
-    { key: 'activity',        label: 'Activity',        icon: Activity },
+  const groups = [
+    {
+      label: 'Portfolio',
+      items: [
+        { key: 'dashboard',       label: 'Dashboard',       icon: Home },
+        { key: 'holdings',        label: 'Holdings',        icon: Briefcase },
+        { key: 'watchlist',       label: 'Watchlist',       icon: Eye },
+        { key: 'search',          label: 'Stock Search',    icon: Search },
+        { key: 'analytics',       label: 'Analytics',       icon: BarChart3 },
+        { key: 'activity',        label: 'Activity',        icon: Activity },
+      ],
+    },
+    {
+      label: 'AI Intelligence',
+      items: [
+        { key: 'aibrain',    label: 'AI Brain',           icon: Brain,         badge: 'AI' },
+        { key: 'macro',      label: 'Macro Radar',        icon: Globe },
+        { key: 'sentiment',  label: 'Sentiment',          icon: Newspaper },
+        { key: 'alerts',     label: 'Alert Center',       icon: AlertTriangle, badge: 'LIVE' },
+        { key: 'optimizer',  label: 'Portfolio Optimizer',icon: Target },
+      ],
+    },
+    {
+      label: 'Trading',
+      items: [
+        { key: 'tips',            label: 'Trading Tips',    icon: Crosshair },
+        { key: 'predict',         label: 'ML Forecast',     icon: BarChart2 },
+        { key: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+        { key: 'retirement',      label: 'Retirement',      icon: PiggyBank },
+        { key: 'news',            label: 'News',            icon: Newspaper },
+      ],
+    },
   ];
 
   return (
@@ -1082,30 +1102,35 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
       </div>
 
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <div className="text-[10px] uppercase tracking-[0.2em] px-3 mb-2" style={{ color: C.textFaint }}>Navigation</div>
-        <ul className="space-y-0.5">
-          {items.map(item => {
-            const Icon = item.icon;
-            const isActive = active === item.key;
-            return (
-              <li key={item.key}>
-                <button onClick={() => setActive(item.key)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all text-sm relative no-tap"
-                  style={{ color: isActive ? C.text : C.textDim, background: isActive ? C.surface : 'transparent' }}>
-                  {isActive && <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r" style={{ background: C.gold }} />}
-                  <Icon size={15} strokeWidth={1.8} />
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && !isActive && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold tracking-wider"
-                      style={{ background: C.gold + '25', color: C.gold }}>{item.badge}</span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {groups.map(group => (
+          <div key={group.label} className="mb-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] px-3 mb-1.5" style={{ color: C.textFaint }}>{group.label}</div>
+            <ul className="space-y-0.5">
+              {group.items.map(item => {
+                const Icon = item.icon;
+                const isActive = active === item.key;
+                const badgeColor = item.badge === 'AI' ? '#a78bfa' : item.badge === 'LIVE' ? C.pos : C.gold;
+                return (
+                  <li key={item.key}>
+                    <button onClick={() => setActive(item.key)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all text-sm relative no-tap"
+                      style={{ color: isActive ? C.text : C.textDim, background: isActive ? C.surface : 'transparent' }}>
+                      {isActive && <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r" style={{ background: C.gold }} />}
+                      <Icon size={15} strokeWidth={1.8} />
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge && !isActive && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold tracking-wider"
+                          style={{ background: badgeColor + '25', color: badgeColor }}>{item.badge}</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
 
-        <div className="text-[10px] uppercase tracking-[0.2em] px-3 mb-2 mt-6" style={{ color: C.textFaint }}>Configuration</div>
+        <div className="text-[10px] uppercase tracking-[0.2em] px-3 mb-2 mt-2" style={{ color: C.textFaint }}>Configuration</div>
         <ul className="space-y-0.5">
           <li>
             <button onClick={() => setActive('settings')}
@@ -4073,6 +4098,1038 @@ const StockSearchView = ({ onAddToWatchlist, onAddToPortfolio, watchlist }) => {
 };
 
 /* ============================================================
+   AI BRAIN VIEWS — Autonomous Investment Intelligence
+   ============================================================ */
+
+// ── AI Brain Report View ──────────────────────────────────────────────────────
+const AIBrainView = ({ portfolio }) => {
+  const [sym, setSym] = useState('');
+  const [inputVal, setInputVal] = useState('');
+  const [report, setReport] = useState(null);
+  const [forecasts, setForecasts] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [brainStatus, setBrainStatus] = useState(null);
+
+  useEffect(() => {
+    apiFetch('/api/brain/status').then(setBrainStatus).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.symbol) { setInputVal(e.detail.symbol); fetchReport(e.detail.symbol); }
+    };
+    window.addEventListener('finsight:prefill', handler);
+    return () => window.removeEventListener('finsight:prefill', handler);
+  }, []);
+
+  const fetchReport = async (symbol) => {
+    const s = (symbol || inputVal).trim().toUpperCase();
+    if (!s) return;
+    setSym(s); setLoading(true); setError(null); setReport(null); setForecasts(null);
+    try {
+      const [rep, fc] = await Promise.all([
+        apiFetch(`/api/brain/report/${s}?include_macro=true&use_cache=false`,
+          {}, { onWarmup: () => setError('warming_up') }),
+        apiFetch(`/api/brain/forecast-all/${s}`, {}, { onWarmup: () => {} }).catch(() => null),
+      ]);
+      setReport(rep);
+      setForecasts(fc);
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const thesisColor = (t) => t === 'bullish' ? C.pos : t === 'bearish' ? C.neg : C.gold;
+  const thesisIcon = (t) => t === 'bullish' ? '▲' : t === 'bearish' ? '▼' : '◆';
+  const convColor = (c) => c === 'high' ? C.pos : c === 'medium' ? C.gold : C.textDim;
+
+  return (
+    <div className="space-y-6 fade-in">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-serif text-3xl" style={{ color: C.text }}>AI Brain</h1>
+          <p className="text-sm mt-1" style={{ color: C.textDim }}>
+            Institutional-grade analysis powered by {brainStatus?.claude_available ? 'Claude AI' : 'quantitative models'}
+          </p>
+        </div>
+        {brainStatus && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold"
+            style={{
+              borderColor: brainStatus.claude_available ? C.pos : C.gold,
+              color: brainStatus.claude_available ? C.pos : C.gold,
+              background: brainStatus.claude_available ? C.pos + '10' : C.gold + '10',
+            }}>
+            <div className="w-1.5 h-1.5 rounded-full pulse-dot"
+              style={{ background: brainStatus.claude_available ? C.pos : C.gold }} />
+            {brainStatus.claude_available ? 'Claude AI Active' : 'Statistical Mode'}
+          </div>
+        )}
+      </div>
+
+      {/* Search */}
+      <div className="rounded-2xl border p-6" style={{ background: C.surface, borderColor: C.border }}>
+        <div className="flex gap-3">
+          <div className="flex-1 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.textFaint }} />
+            <input
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && fetchReport()}
+              placeholder="Enter ticker symbol (e.g. AAPL, NVDA, MSFT)"
+              className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
+              style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }}
+            />
+          </div>
+          <button onClick={() => fetchReport()}
+            disabled={loading || !inputVal.trim()}
+            className="px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all"
+            style={{ background: C.gold, color: C.ink, opacity: loading || !inputVal.trim() ? 0.5 : 1 }}>
+            {loading ? <RefreshCw size={15} className="spin" /> : <Brain size={15} />}
+            {loading ? 'Analyzing…' : 'Generate Report'}
+          </button>
+        </div>
+
+        {/* Quick picks from portfolio */}
+        {portfolio?.positions?.length > 0 && (
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
+            <span className="text-xs" style={{ color: C.textFaint }}>Your holdings:</span>
+            {portfolio.positions.slice(0, 8).map(p => (
+              <button key={p.symbol} onClick={() => { setInputVal(p.symbol); fetchReport(p.symbol); }}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-all hover:opacity-80"
+                style={{ background: C.surface2, color: C.gold, border: `1px solid ${C.border}` }}>
+                {p.symbol}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Warming up state */}
+      {error === 'warming_up' && (
+        <div className="rounded-2xl border p-6 flex items-center gap-4"
+          style={{ background: C.surface, borderColor: C.gold + '40' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: C.gold + '15' }}>
+            <RefreshCw size={18} className="spin" style={{ color: C.gold }} />
+          </div>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: C.gold }}>Backend warming up…</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>First request wakes the server. Retrying automatically.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && error !== 'warming_up' && (
+        <div className="rounded-2xl border p-5 flex items-center gap-3"
+          style={{ background: C.surface, borderColor: C.neg + '40' }}>
+          <AlertCircle size={18} style={{ color: C.neg }} />
+          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && !report && (
+        <div className="space-y-4">
+          {[1,2,3].map(i => (
+            <div key={i} className="rounded-2xl border p-6 space-y-3"
+              style={{ background: C.surface, borderColor: C.border }}>
+              <div className="h-4 rounded-lg w-1/3" style={{ background: C.surface2 }} />
+              <div className="h-3 rounded-lg w-full" style={{ background: C.surface2 }} />
+              <div className="h-3 rounded-lg w-2/3" style={{ background: C.surface2 }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Report */}
+      {report && (
+        <div className="space-y-5 fade-in">
+          {/* Executive Header */}
+          <div className="rounded-2xl border p-6"
+            style={{ background: C.surface, borderColor: thesisColor(report.thesis) + '40' }}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h2 className="font-serif text-2xl" style={{ color: C.text }}>{report.symbol}</h2>
+                  {report.name && report.name !== report.symbol && (
+                    <span className="text-sm" style={{ color: C.textDim }}>{report.name}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider"
+                    style={{ background: thesisColor(report.thesis) + '15', color: thesisColor(report.thesis) }}>
+                    {thesisIcon(report.thesis)} {report.thesis}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                    style={{ background: convColor(report.conviction) + '15', color: convColor(report.conviction) }}>
+                    {report.conviction} conviction
+                  </span>
+                  {report.claude_powered && (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{ background: '#7c3aed20', color: '#a78bfa' }}>
+                      ✦ Claude AI
+                    </span>
+                  )}
+                  <span className="text-xs" style={{ color: C.textFaint }}>
+                    Score: <span className="font-mono font-bold" style={{ color: C.gold }}>{report.composite_score}/100</span>
+                  </span>
+                </div>
+              </div>
+              {report.technicals?.price && (
+                <div className="text-right">
+                  <div className="font-mono text-2xl font-bold" style={{ color: C.text }}>
+                    {fmt.dollar(report.technicals.price, 2)}
+                  </div>
+                  {report.technicals?.ret_1m !== undefined && (
+                    <div className="text-sm font-mono"
+                      style={{ color: report.technicals.ret_1m >= 0 ? C.pos : C.neg }}>
+                      {report.technicals.ret_1m >= 0 ? '+' : ''}{report.technicals.ret_1m?.toFixed(1)}% (1M)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm leading-relaxed" style={{ color: C.textDim }}>
+              {report.executive_summary}
+            </p>
+
+            {report.recommended_action && (
+              <div className="mt-4 p-3 rounded-xl"
+                style={{ background: thesisColor(report.thesis) + '08', border: `1px solid ${thesisColor(report.thesis)}25` }}>
+                <p className="text-xs font-semibold mb-0.5 uppercase tracking-wider"
+                  style={{ color: thesisColor(report.thesis) }}>Recommended Action</p>
+                <p className="text-sm" style={{ color: C.text }}>{report.recommended_action}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Price Targets + Scores Row */}
+          <div className="grid grid-cols-2 gap-5">
+            {report.price_targets && (
+              <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>Price Targets</p>
+                {[
+                  ['Bull Case', report.price_targets.bull, C.pos],
+                  ['Base Case', report.price_targets.base, C.gold],
+                  ['Bear Case', report.price_targets.bear, C.neg],
+                ].map(([label, target, color]) => {
+                  const ret = report.technicals?.price && target
+                    ? ((target / report.technicals.price - 1) * 100).toFixed(1) : null;
+                  return (
+                    <div key={label} className="flex items-center justify-between py-2 border-b last:border-0"
+                      style={{ borderColor: C.border }}>
+                      <span className="text-xs" style={{ color: C.textDim }}>{label}</span>
+                      <div className="text-right">
+                        <span className="font-mono font-bold text-sm" style={{ color }}>{fmt.dollar(target, 2)}</span>
+                        {ret !== null && (
+                          <span className="ml-2 text-xs font-mono" style={{ color: parseFloat(ret) >= 0 ? C.pos : C.neg }}>
+                            {parseFloat(ret) >= 0 ? '+' : ''}{ret}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {report.price_targets.analyst && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs" style={{ color: C.textFaint }}>Analyst Consensus</span>
+                    <span className="font-mono text-sm font-bold" style={{ color: C.info }}>
+                      {fmt.dollar(report.price_targets.analyst, 2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Intelligence Scores */}
+            <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>Intelligence Scores</p>
+              {[
+                ['Technical', report.tech_score, C.gold],
+                ['Sentiment', report.sentiment_score, C.info],
+                ['Macro', report.macro_score, '#a78bfa'],
+                ['Composite', report.composite_score, C.pos],
+              ].map(([label, score, color]) => score !== undefined && (
+                <div key={label} className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{ color: C.textDim }}>{label}</span>
+                    <span className="font-mono font-bold" style={{ color }}>{Math.round(score)}/100</span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.surface2 }}>
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${Math.round(score)}%`, background: color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Catalysts & Risks */}
+          <div className="grid grid-cols-2 gap-5">
+            {[
+              ['Key Catalysts', report.key_catalysts, C.pos, CheckCircle2],
+              ['Key Risks', report.key_risks, C.neg, AlertTriangle],
+            ].map(([title, items, color, Icon]) => (
+              <div key={title} className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: C.textFaint }}>{title}</p>
+                <ul className="space-y-2.5">
+                  {(items || []).map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <Icon size={13} className="mt-0.5 shrink-0" style={{ color }} />
+                      <span className="text-sm leading-relaxed" style={{ color: C.textDim }}>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* Context signals row */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              ['Macro Context', report.macro_impact],
+              ['Sentiment Signal', report.sentiment_read],
+              ['Technical Read', report.technical_read],
+            ].filter(([,v]) => v).map(([title, text]) => (
+              <div key={title} className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+                <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: C.textFaint }}>{title}</p>
+                <p className="text-xs leading-relaxed" style={{ color: C.textDim }}>{text}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ML Forecasts */}
+          {forecasts && (
+            <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>ML Price Forecasts (XGBoost)</p>
+              <div className="grid grid-cols-3 gap-4">
+                {[['7d', '7 Day'], ['30d', '30 Day'], ['90d', '90 Day']].map(([key, label]) => {
+                  const fc = forecasts.horizons?.[key];
+                  if (!fc?.available) return null;
+                  const ret = fc.forecast_return_pct;
+                  const color = ret >= 0 ? C.pos : C.neg;
+                  return (
+                    <div key={key} className="rounded-xl p-4 text-center"
+                      style={{ background: C.surface2, border: `1px solid ${C.border}` }}>
+                      <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: C.textFaint }}>{label} Forecast</p>
+                      <p className="font-mono text-xl font-bold" style={{ color }}>{ret >= 0 ? '+' : ''}{ret?.toFixed(1)}%</p>
+                      <p className="font-mono text-sm mt-1" style={{ color: C.text }}>{fmt.dollar(fc.forecast_price, 2)}</p>
+                      <p className="text-[10px] mt-2" style={{ color: C.textFaint }}>
+                        CI: {fmt.dollar(fc.confidence_low, 2)} – {fmt.dollar(fc.confidence_high, 2)}
+                      </p>
+                      <p className="text-[10px]" style={{ color: C.textFaint }}>
+                        Dir. Accuracy: {Math.round(fc.directional_accuracy * 100)}%
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Disclaimer */}
+          {report.disclaimer && (
+            <p className="text-[10px] px-1" style={{ color: C.textFaint }}>⚠ {report.disclaimer}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Macro Radar View ─────────────────────────────────────────────────────────
+const MacroRadarView = () => {
+  const [macro, setMacro] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchMacro = async () => {
+    setLoading(true); setError(null);
+    try {
+      const data = await apiFetch('/api/brain/macro', {}, { onWarmup: () => {} });
+      setMacro(data);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchMacro(); }, []);
+
+  const regimeColor = (r) => r === 'easy' ? C.pos : r === 'restrictive' ? C.neg : C.gold;
+  const regimeLabel = (r) => r === 'easy' ? 'Accommodative — Risk-On' : r === 'restrictive' ? 'Restrictive — Defensive' : 'Neutral';
+
+  const indicators = macro ? [
+    { label: '10Y Treasury',  value: macro.rate_10y != null ? `${macro.rate_10y?.toFixed(2)}%` : 'N/A',
+      note: macro.rate_10y > 4.5 ? 'Elevated — headwind' : macro.rate_10y < 3 ? 'Low — tailwind' : 'Moderate',
+      color: macro.rate_10y > 4.5 ? C.neg : macro.rate_10y < 3 ? C.pos : C.gold },
+    { label: '2Y Treasury',   value: macro.rate_2y != null ? `${macro.rate_2y?.toFixed(2)}%` : 'N/A',
+      note: 'Short-end rate', color: C.textDim },
+    { label: 'Yield Curve',   value: macro.yield_curve != null ? `${macro.yield_curve > 0 ? '+' : ''}${macro.yield_curve?.toFixed(2)}%` : 'N/A',
+      note: macro.yield_curve < -0.3 ? 'Inverted — recession risk' : macro.yield_curve > 0.5 ? 'Normal — expansion' : 'Flat',
+      color: macro.yield_curve < -0.3 ? C.neg : macro.yield_curve > 0.5 ? C.pos : C.gold },
+    { label: 'Fed Funds Rate', value: macro.fed_funds != null ? `${macro.fed_funds?.toFixed(2)}%` : 'N/A',
+      note: macro.fed_funds > 4.5 ? 'Restrictive policy' : macro.fed_funds < 2 ? 'Accommodative' : 'Neutral',
+      color: macro.fed_funds > 4.5 ? C.neg : macro.fed_funds < 2 ? C.pos : C.gold },
+    { label: 'Unemployment',   value: macro.unemployment != null ? `${macro.unemployment?.toFixed(1)}%` : 'N/A',
+      note: macro.unemployment < 4.5 ? 'Strong labor market' : 'Weakening labor',
+      color: macro.unemployment < 4.5 ? C.pos : C.neg },
+    { label: 'HY Credit Spread', value: macro.hy_spread != null ? `${macro.hy_spread?.toFixed(2)}%` : 'N/A',
+      note: macro.hy_spread > 6 ? 'Wide spreads — risk-off' : macro.hy_spread < 3.5 ? 'Tight — risk-on' : 'Normal range',
+      color: macro.hy_spread > 6 ? C.neg : macro.hy_spread < 3.5 ? C.pos : C.gold },
+  ] : [];
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Macro Radar</h1>
+          <p className="text-sm mt-1" style={{ color: C.textDim }}>Federal Reserve Economic Data — real-time macro environment</p>
+        </div>
+        <button onClick={fetchMacro} className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm transition-all"
+          style={{ borderColor: C.border, color: C.textDim, background: C.surface }}>
+          <RefreshCw size={14} className={loading ? 'spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {macro && (
+        <div className="rounded-2xl border p-5"
+          style={{ background: regimeColor(macro.macro_regime) + '08',
+                   borderColor: regimeColor(macro.macro_regime) + '40' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider mb-1"
+                style={{ color: regimeColor(macro.macro_regime) }}>Macro Regime</div>
+              <div className="font-serif text-xl" style={{ color: C.text }}>
+                {regimeLabel(macro.macro_regime)}
+              </div>
+              {macro.regime_signals?.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {macro.regime_signals.map(s => (
+                    <span key={s} className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: regimeColor(macro.macro_regime) + '15',
+                               color: regimeColor(macro.macro_regime) }}>{s}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="text-right">
+              <div className="text-4xl font-serif font-bold" style={{ color: regimeColor(macro.macro_regime) }}>
+                {macro.macro_score}
+              </div>
+              <div className="text-xs" style={{ color: C.textFaint }}>Macro Score / 100</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && !macro && (
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-2xl border p-5 space-y-2"
+              style={{ background: C.surface, borderColor: C.border }}>
+              <div className="h-3 rounded w-1/2" style={{ background: C.surface2 }} />
+              <div className="h-6 rounded w-2/3" style={{ background: C.surface2 }} />
+              <div className="h-2 rounded w-full" style={{ background: C.surface2 }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border p-4 flex items-center gap-2"
+          style={{ borderColor: C.neg + '30', color: C.neg }}>
+          <AlertCircle size={14} />
+          <span className="text-sm">{error}</span>
+        </div>
+      )}
+
+      {macro && (
+        <div className="grid grid-cols-3 gap-4">
+          {indicators.map(ind => (
+            <div key={ind.label} className="rounded-2xl border p-5"
+              style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs uppercase tracking-wider mb-2" style={{ color: C.textFaint }}>{ind.label}</p>
+              <p className="font-mono text-2xl font-bold" style={{ color: ind.color || C.text }}>{ind.value}</p>
+              {ind.note && <p className="text-xs mt-1.5" style={{ color: C.textDim }}>{ind.note}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {macro && (
+        <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>Macro Score Breakdown</p>
+          <div className="h-3 rounded-full overflow-hidden relative" style={{ background: C.surface2 }}>
+            <div className="h-full rounded-full transition-all"
+              style={{
+                width: `${macro.macro_score}%`,
+                background: macro.macro_score >= 60 ? `linear-gradient(90deg, ${C.pos}80, ${C.pos})`
+                          : macro.macro_score >= 40 ? `linear-gradient(90deg, ${C.gold}80, ${C.gold})`
+                          : `linear-gradient(90deg, ${C.neg}80, ${C.neg})`,
+              }} />
+          </div>
+          <div className="flex justify-between text-[10px] mt-1.5">
+            <span style={{ color: C.neg }}>Restrictive (0)</span>
+            <span style={{ color: C.gold }}>Neutral (50)</span>
+            <span style={{ color: C.pos }}>Accommodative (100)</span>
+          </div>
+          <p className="text-sm mt-4" style={{ color: C.textDim }}>
+            {macro.macro_score >= 60
+              ? 'Macro environment supports risk assets. Favor growth exposure, cyclicals, and momentum names.'
+              : macro.macro_score >= 40
+              ? 'Mixed macro signals. Maintain balanced exposure and tighten stop-losses.'
+              : 'Restrictive macro conditions. Reduce equity exposure, favor defensives and cash.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Sentiment Intelligence View ───────────────────────────────────────────────
+const SentimentView = ({ portfolio }) => {
+  const [sym, setSym] = useState('');
+  const [inputVal, setInputVal] = useState('');
+  const [sentiment, setSentiment] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [batchResults, setBatchResults] = useState([]);
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  const fetchSentiment = async (symbol) => {
+    const s = (symbol || inputVal).trim().toUpperCase();
+    if (!s) return;
+    setSym(s); setLoading(true); setError(null); setSentiment(null);
+    try {
+      const data = await apiFetch(`/api/brain/sentiment/${s}`, {}, { onWarmup: () => {} });
+      setSentiment(data);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const fetchBatch = async () => {
+    if (!portfolio?.positions?.length) return;
+    setBatchLoading(true); setBatchResults([]);
+    const syms = portfolio.positions.slice(0, 6).map(p => p.symbol);
+    const results = await Promise.all(
+      syms.map(s => apiFetch(`/api/brain/sentiment/${s}`, {}, { onWarmup: () => {} }).catch(e => ({ symbol: s, error: true })))
+    );
+    setBatchResults(results);
+    setBatchLoading(false);
+  };
+
+  const sentColor = (label) => {
+    if (!label) return C.textDim;
+    if (label.includes('bullish')) return C.pos;
+    if (label.includes('bearish')) return C.neg;
+    return C.gold;
+  };
+
+  const meterWidth = (score) => `${Math.max(2, Math.min(100, score))}%`;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Sentiment Intelligence</h1>
+          <p className="text-sm mt-1" style={{ color: C.textDim }}>NLP-powered news sentiment analysis via VADER</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border p-6" style={{ background: C.surface, borderColor: C.border }}>
+        <div className="flex gap-3 mb-4">
+          <div className="flex-1 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.textFaint }} />
+            <input value={inputVal} onChange={e => setInputVal(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && fetchSentiment()}
+              placeholder="Symbol (e.g. AAPL)"
+              className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
+              style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }} />
+          </div>
+          <button onClick={() => fetchSentiment()} disabled={loading || !inputVal.trim()}
+            className="px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2"
+            style={{ background: C.gold, color: C.ink, opacity: !inputVal.trim() ? 0.5 : 1 }}>
+            {loading ? <RefreshCw size={15} className="spin" /> : <Newspaper size={15} />}
+            Analyze
+          </button>
+          {portfolio?.positions?.length > 0 && (
+            <button onClick={fetchBatch} disabled={batchLoading}
+              className="px-4 py-3 rounded-xl border text-sm flex items-center gap-2"
+              style={{ borderColor: C.border, color: C.textDim, background: C.surface2 }}>
+              {batchLoading ? <RefreshCw size={14} className="spin" /> : <Briefcase size={14} />}
+              Portfolio Scan
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Single symbol result */}
+      {sentiment && (
+        <div className="space-y-4 fade-in">
+          <div className="rounded-2xl border p-6" style={{ background: C.surface, borderColor: C.border }}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="font-serif text-xl" style={{ color: C.text }}>{sentiment.symbol} Sentiment</h2>
+                <p className="text-xs mt-1" style={{ color: C.textFaint }}>{sentiment.article_count} articles analyzed</p>
+              </div>
+              <div className="text-right">
+                <div className="font-serif text-2xl font-bold" style={{ color: sentColor(sentiment.sentiment_label) }}>
+                  {sentiment.sentiment_label?.replace(/_/g, ' ')}
+                </div>
+                <div className="text-xs" style={{ color: C.textFaint }}>Score: {sentiment.sentiment_score}/100</div>
+              </div>
+            </div>
+            {/* Gauge */}
+            <div className="mb-5">
+              <div className="h-2.5 rounded-full relative overflow-hidden"
+                style={{ background: `linear-gradient(90deg, ${C.neg}, ${C.gold}, ${C.pos})` }}>
+                <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow"
+                  style={{ left: meterWidth(sentiment.sentiment_score), marginLeft: -8, background: C.surface, transform: 'translateX(-50%) translateY(-50%)' }} />
+              </div>
+              <div className="flex justify-between text-[10px] mt-1">
+                <span style={{ color: C.neg }}>Bearish</span>
+                <span style={{ color: C.gold }}>Neutral</span>
+                <span style={{ color: C.pos }}>Bullish</span>
+              </div>
+            </div>
+            {/* Counts */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {[
+                ['Bullish', sentiment.bullish_count, C.pos],
+                ['Neutral', sentiment.neutral_count, C.gold],
+                ['Bearish', sentiment.bearish_count, C.neg],
+              ].map(([label, count, color]) => (
+                <div key={label} className="rounded-xl p-3 text-center"
+                  style={{ background: color + '10', border: `1px solid ${color}25` }}>
+                  <div className="font-mono text-xl font-bold" style={{ color }}>{count}</div>
+                  <div className="text-xs" style={{ color: C.textFaint }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Headlines */}
+          {sentiment.top_headlines?.length > 0 && (
+            <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: C.textFaint }}>Recent Headlines</p>
+              <div className="space-y-3">
+                {sentiment.top_headlines.map((h, i) => (
+                  <div key={i} className="flex items-start gap-3 py-2.5 border-b last:border-0"
+                    style={{ borderColor: C.border }}>
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0`}
+                      style={{ background: sentColor(h.label) }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm leading-tight" style={{ color: C.text }}>{h.title}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: C.textFaint }}>
+                        {h.publisher} · {h.published}
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono shrink-0 px-2 py-0.5 rounded"
+                      style={{ background: sentColor(h.label) + '15', color: sentColor(h.label) }}>
+                      {h.compound > 0 ? '+' : ''}{h.compound?.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Batch portfolio results */}
+      {batchResults.length > 0 && (
+        <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>Portfolio Sentiment Scan</p>
+          <div className="space-y-3">
+            {batchResults.map(r => !r.error && (
+              <div key={r.symbol} className="flex items-center gap-4 py-2 border-b last:border-0"
+                style={{ borderColor: C.border }}>
+                <span className="font-mono font-bold text-sm w-16" style={{ color: C.gold }}>{r.symbol}</span>
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: C.surface2 }}>
+                  <div className="h-full rounded-full"
+                    style={{ width: meterWidth(r.sentiment_score), background: sentColor(r.sentiment_label) }} />
+                </div>
+                <span className="text-xs font-semibold w-32 text-right"
+                  style={{ color: sentColor(r.sentiment_label) }}>
+                  {r.sentiment_label?.replace(/_/g, ' ')}
+                </span>
+                <span className="text-xs font-mono w-8 text-right" style={{ color: C.textFaint }}>
+                  {r.sentiment_score}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Portfolio Optimizer View ──────────────────────────────────────────────────
+const PortfolioOptimizerView = ({ portfolio }) => {
+  const [result, setResult] = useState(null);
+  const [corr, setCorr] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const CHART_COLORS = ['#d4a945','#5fa872','#6f8fb8','#c97049','#a78bfa','#f472b6','#34d399','#fb923c'];
+
+  const runOptimize = async () => {
+    if (!portfolio?.positions?.length) return;
+    setLoading(true); setError(null); setResult(null);
+    const syms = portfolio.positions.map(p => p.symbol);
+    const currentWeights = {};
+    portfolio.positions.forEach(p => {
+      currentWeights[p.symbol] = p.value / (portfolio.value || 1);
+    });
+    try {
+      const [opt, corrData] = await Promise.all([
+        apiFetch('/api/brain/portfolio/optimize', {
+          method: 'POST',
+          body: JSON.stringify({ symbols: syms, current_weights: currentWeights }),
+        }, { onWarmup: () => {} }),
+        apiFetch(`/api/brain/portfolio/correlations?symbols=${syms.join(',')}`, {}, { onWarmup: () => {} }).catch(() => null),
+      ]);
+      setResult(opt);
+      setCorr(corrData);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const corrColor = (v) => {
+    if (v >= 0.8) return C.neg;
+    if (v >= 0.5) return '#f97316';
+    if (v >= 0.2) return C.gold;
+    if (v >= -0.2) return C.textDim;
+    return C.pos;
+  };
+
+  const barData = result?.symbols?.map((s, i) => ({
+    symbol: s,
+    current: Math.round((result.current_weights[s] || 0) * 100),
+    optimal: Math.round((result.optimized_weights[s] || 0) * 100),
+  }));
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Portfolio Optimizer</h1>
+          <p className="text-sm mt-1" style={{ color: C.textDim }}>
+            Mean-Variance / Max-Sharpe optimization with Monte Carlo frontier
+          </p>
+        </div>
+        <button onClick={runOptimize} disabled={loading || !portfolio?.positions?.length}
+          className="px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2"
+          style={{ background: C.gold, color: C.ink, opacity: loading ? 0.6 : 1 }}>
+          {loading ? <RefreshCw size={15} className="spin" /> : <Target size={15} />}
+          {loading ? 'Optimizing…' : 'Run Optimization'}
+        </button>
+      </div>
+
+      {!portfolio?.positions?.length && (
+        <div className="rounded-2xl border p-8 text-center"
+          style={{ background: C.surface, borderColor: C.border }}>
+          <Briefcase size={32} className="mx-auto mb-3" style={{ color: C.textFaint }} />
+          <p style={{ color: C.textDim }}>Add holdings to your portfolio to run optimization</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border p-4 flex items-center gap-2"
+          style={{ borderColor: C.neg + '30', color: C.neg }}>
+          <AlertCircle size={14} /><span className="text-sm">{error}</span>
+        </div>
+      )}
+
+      {result?.available && (
+        <div className="space-y-5 fade-in">
+          {/* Sharpe improvement */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              ['Current Sharpe', result.current_sharpe?.toFixed(3), C.textDim, `${result.current_return_pct?.toFixed(1)}% return / ${result.current_vol_pct?.toFixed(1)}% vol`],
+              ['Optimized Sharpe', result.optimized_sharpe?.toFixed(3), C.pos, `${result.optimized_return_pct?.toFixed(1)}% return / ${result.optimized_vol_pct?.toFixed(1)}% vol`],
+              ['Improvement', `+${result.sharpe_improvement_pct?.toFixed(1)}%`, C.gold, 'Sharpe ratio improvement'],
+            ].map(([label, val, color, note]) => (
+              <div key={label} className="rounded-2xl border p-5 text-center"
+                style={{ background: C.surface, borderColor: C.border }}>
+                <p className="text-xs uppercase tracking-wider mb-2" style={{ color: C.textFaint }}>{label}</p>
+                <p className="font-mono text-2xl font-bold" style={{ color }}>{val}</p>
+                <p className="text-xs mt-1" style={{ color: C.textFaint }}>{note}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Current vs Optimal bar chart */}
+          {barData && (
+            <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>
+                Current vs. Optimal Allocation
+              </p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={barData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                  <XAxis dataKey="symbol" tick={{ fill: C.textDim, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: C.textFaint, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+                  <Tooltip
+                    contentStyle={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: C.text }}
+                    formatter={(v, n) => [`${v}%`, n === 'current' ? 'Current' : 'Optimal']}
+                  />
+                  <Bar dataKey="current" name="current" fill={C.textDim + '80'} radius={[4,4,0,0]} />
+                  <Bar dataKey="optimal" name="optimal" fill={C.gold} radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Rebalance suggestions */}
+          <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>Rebalance Suggestions</p>
+            <div className="space-y-2">
+              {result.rebalance_suggestions?.map(s => (
+                <div key={s.symbol} className="flex items-center gap-4 py-2.5 border-b last:border-0"
+                  style={{ borderColor: C.border }}>
+                  <span className="font-mono font-bold text-sm w-14" style={{ color: C.gold }}>{s.symbol}</span>
+                  <div className="flex-1 flex items-center gap-3">
+                    <span className="text-sm font-mono" style={{ color: C.textDim }}>{s.current_pct}%</span>
+                    <ArrowRight size={12} style={{ color: C.textFaint }} />
+                    <span className="text-sm font-mono font-semibold" style={{ color: C.text }}>{s.optimal_pct}%</span>
+                  </div>
+                  <span className="text-xs font-mono"
+                    style={{ color: s.delta_pct > 2 ? C.pos : s.delta_pct < -2 ? C.neg : C.textFaint }}>
+                    {s.delta_pct > 0 ? '+' : ''}{s.delta_pct}%
+                  </span>
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full`}
+                    style={{
+                      background: s.action === 'increase' ? C.pos + '15'
+                        : s.action === 'decrease' ? C.neg + '15' : C.surface2,
+                      color: s.action === 'increase' ? C.pos
+                        : s.action === 'decrease' ? C.neg : C.textFaint,
+                    }}>
+                    {s.action}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Correlation heatmap */}
+          {corr?.available && corr.symbols && (
+            <div className="rounded-2xl border p-5" style={{ background: C.surface, borderColor: C.border }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: C.textFaint }}>
+                Correlation Heatmap (1-Year Returns)
+              </p>
+              <div className="overflow-x-auto">
+                <table className="text-[11px] font-mono">
+                  <thead>
+                    <tr>
+                      <th style={{ color: C.textFaint, padding: '4px 8px', textAlign: 'left' }}></th>
+                      {corr.symbols.map(s => (
+                        <th key={s} style={{ color: C.gold, padding: '4px 8px', textAlign: 'center', fontWeight: 700 }}>{s}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {corr.symbols.map((s1, i) => (
+                      <tr key={s1}>
+                        <td style={{ color: C.gold, padding: '3px 8px', fontWeight: 700 }}>{s1}</td>
+                        {corr.matrix[i].map((v, j) => (
+                          <td key={j} style={{
+                            padding: '3px 8px', textAlign: 'center',
+                            background: i === j ? C.surface2
+                              : v >= 0.8 ? C.neg + '40'
+                              : v >= 0.5 ? '#f9731640'
+                              : v >= 0.2 ? C.gold + '25'
+                              : v < -0.2 ? C.pos + '25'
+                              : 'transparent',
+                            color: i === j ? C.textFaint : corrColor(v),
+                            borderRadius: 4,
+                          }}>
+                            {i === j ? '—' : v.toFixed(2)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-4 mt-3 text-[10px]">
+                {[['≥0.8 High', C.neg], ['0.5-0.8 Moderate', '#f97316'], ['0.2-0.5 Low', C.gold], ['<0.2 Minimal', C.pos]].map(([l,c]) => (
+                  <span key={l} className="flex items-center gap-1" style={{ color: C.textFaint }}>
+                    <span className="w-2.5 h-2.5 rounded" style={{ background: c + '50', display: 'inline-block' }} />
+                    {l}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Alert Center View ─────────────────────────────────────────────────────────
+const AlertCenterView = ({ portfolio, watchlist }) => {
+  const [alertData, setAlertData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const allSymbols = useMemo(() => {
+    const syms = new Set([
+      ...(portfolio?.positions || []).map(p => p.symbol),
+      ...(watchlist || []),
+    ]);
+    return [...syms].slice(0, 25);
+  }, [portfolio, watchlist]);
+
+  const fetchAlerts = async () => {
+    if (!allSymbols.length) return;
+    setLoading(true); setError(null);
+    try {
+      const data = await apiFetch(
+        `/api/brain/alerts?symbols=${allSymbols.join(',')}`,
+        {}, { onWarmup: () => {} }
+      );
+      setAlertData(data);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchAlerts(); }, [allSymbols.join(',')]);
+
+  // Auto-refresh every 30 min
+  useEffect(() => {
+    const id = setInterval(fetchAlerts, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [allSymbols.join(',')]);
+
+  const sevColor = (s) => s === 'high' ? C.neg : s === 'medium' ? C.gold : C.textDim;
+  const typeIcon = (t) => {
+    switch (t) {
+      case 'RSI_OVERBOUGHT':
+      case 'RSI_OVERSOLD':    return '◈';
+      case 'VOLUME_SPIKE':
+      case 'VOLUME_SURGE':    return '▲';
+      case 'BB_SQUEEZE':
+      case 'BB_BREAKOUT':     return '◆';
+      case 'DEATH_CROSS':     return '✕';
+      case 'GOLDEN_CROSS':    return '★';
+      case 'BEARISH_DIVERGENCE': return '↓';
+      case '52W_HIGH':        return '⬆';
+      case 'EARNINGS_APPROACHING': return '📅';
+      default: return '◉';
+    }
+  };
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Alert Center</h1>
+          <p className="text-sm mt-1" style={{ color: C.textDim }}>
+            Real-time anomaly detection across {allSymbols.length} symbols
+          </p>
+        </div>
+        <button onClick={fetchAlerts} disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm"
+          style={{ borderColor: C.border, color: C.textDim, background: C.surface }}>
+          <RefreshCw size={14} className={loading ? 'spin' : ''} />
+          {loading ? 'Scanning…' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Stats */}
+      {alertData && (
+        <div className="grid grid-cols-4 gap-4">
+          {[
+            ['Scanned', alertData.scanned, C.textDim],
+            ['Total Alerts', alertData.total_alerts, alertData.total_alerts > 0 ? C.gold : C.pos],
+            ['High Priority', alertData.alerts?.filter(a => a.severity === 'high').length, C.neg],
+            ['Medium Priority', alertData.alerts?.filter(a => a.severity === 'medium').length, C.gold],
+          ].map(([label, count, color]) => (
+            <div key={label} className="rounded-xl border p-4 text-center"
+              style={{ background: C.surface, borderColor: C.border }}>
+              <p className="font-mono text-2xl font-bold" style={{ color }}>{count ?? '—'}</p>
+              <p className="text-xs mt-1" style={{ color: C.textFaint }}>{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border p-4 flex items-center gap-2"
+          style={{ borderColor: C.neg + '30', color: C.neg }}>
+          <AlertCircle size={14} /><span className="text-sm">{error}</span>
+        </div>
+      )}
+
+      {loading && !alertData && (
+        <div className="rounded-2xl border p-8 text-center"
+          style={{ background: C.surface, borderColor: C.border }}>
+          <RefreshCw size={24} className="spin mx-auto mb-3" style={{ color: C.gold }} />
+          <p className="text-sm" style={{ color: C.textDim }}>Scanning {allSymbols.length} symbols for anomalies…</p>
+        </div>
+      )}
+
+      {alertData?.alerts?.length === 0 && (
+        <div className="rounded-2xl border p-10 text-center"
+          style={{ background: C.surface, borderColor: C.pos + '30' }}>
+          <CheckCircle2 size={40} className="mx-auto mb-3" style={{ color: C.pos }} />
+          <p className="font-serif text-lg mb-1" style={{ color: C.pos }}>All Clear</p>
+          <p className="text-sm" style={{ color: C.textDim }}>No active alerts detected across your portfolio and watchlist</p>
+        </div>
+      )}
+
+      {alertData?.alerts?.length > 0 && (
+        <div className="space-y-3">
+          {alertData.alerts.map((alert, i) => (
+            <div key={i} className="rounded-2xl border p-5 flex items-start gap-4 fade-in"
+              style={{
+                background: C.surface,
+                borderColor: sevColor(alert.severity) + '50',
+                borderLeftWidth: 3,
+                borderLeftColor: sevColor(alert.severity),
+              }}>
+              <div className="text-xl shrink-0 mt-0.5" style={{ color: sevColor(alert.severity) }}>
+                {typeIcon(alert.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="font-mono font-bold text-sm" style={{ color: C.gold }}>{alert.symbol}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                    style={{ background: sevColor(alert.severity) + '15', color: sevColor(alert.severity) }}>
+                    {alert.severity}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded" style={{ background: C.surface2, color: C.textFaint }}>
+                    {alert.type?.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <p className="text-sm" style={{ color: C.textDim }}>{alert.message}</p>
+                <p className="text-[10px] mt-1" style={{ color: C.textFaint }}>
+                  {new Date(alert.triggered_at).toLocaleString()}
+                </p>
+              </div>
+              <div className="font-mono font-bold text-sm shrink-0"
+                style={{ color: sevColor(alert.severity) }}>
+                {typeof alert.value === 'number' ? alert.value.toFixed(2) : alert.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
    MAIN APP
    ============================================================ */
 export default function App() {
@@ -4232,6 +5289,11 @@ export default function App() {
               {view === 'activity' && <ActivityView transactions={transactions} />}
               {view === 'tips' && <TradingTipsView portfolio={portfolio} />}
               {view === 'predict' && <PredictionView portfolio={portfolio} />}
+              {view === 'aibrain' && <AIBrainView portfolio={portfolio} />}
+              {view === 'macro' && <MacroRadarView />}
+              {view === 'sentiment' && <SentimentView portfolio={portfolio} />}
+              {view === 'optimizer' && <PortfolioOptimizerView portfolio={portfolio} />}
+              {view === 'alerts' && <AlertCenterView portfolio={portfolio} watchlist={watchlist} />}
               {view === 'settings' && (
                 <SettingsView
                   apiKey={apiKey} setApiKey={setApiKey}
