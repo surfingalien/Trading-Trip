@@ -19,13 +19,23 @@ from typing import Optional
 log = logging.getLogger(__name__)
 
 # ── Optional Claude API ──────────────────────────────────────────────────────
-_ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+# NOTE: key is read dynamically at request time (not cached at import)
+# so setting the env var on Render never requires a restart.
 try:
     import anthropic as _anthropic_module
-    _CLAUDE_AVAILABLE = bool(_ANTHROPIC_KEY)
+    _ANTHROPIC_SDK_AVAILABLE = True
 except ImportError:
-    _CLAUDE_AVAILABLE = False
+    _ANTHROPIC_SDK_AVAILABLE = False
     _anthropic_module = None  # type: ignore
+
+
+def _get_api_key() -> str:
+    """Read key fresh from environment every call — picks up Render env var changes."""
+    return os.getenv("ANTHROPIC_API_KEY", "").strip()
+
+
+def _claude_active() -> bool:
+    return _ANTHROPIC_SDK_AVAILABLE and bool(_get_api_key())
 
 # ── Data dependencies (all in brain package) ──────────────────────────────────
 try:
@@ -275,7 +285,7 @@ def _statistical_report(symbol: str, ta: dict, fund: dict, sent: dict, macro: di
 
 def _claude_report(symbol: str, ta: dict, fund: dict, sent: dict, macro: dict, mem: dict) -> dict:
     """Call Claude API to generate an institutional-quality report."""
-    client = _anthropic_module.Anthropic(api_key=_ANTHROPIC_KEY)
+    client = _anthropic_module.Anthropic(api_key=_get_api_key())
 
     # Compact data payload (~1500 tokens)
     data_blob = json.dumps({
@@ -384,7 +394,7 @@ def generate_report(symbol: str, include_macro: bool = True, use_cache: bool = T
 
     # ── Generate report ───────────────────────────────────────────────────────
     try:
-        if _CLAUDE_AVAILABLE:
+        if _claude_active():
             report = _claude_report(sym, ta, fund, sent, macro, mem)
         else:
             report = _statistical_report(sym, ta, fund, sent, macro)
@@ -414,9 +424,9 @@ def generate_report(symbol: str, include_macro: bool = True, use_cache: bool = T
 def get_brain_status() -> dict:
     """Return feature availability for the /api/brain/status endpoint."""
     return {
-        "claude_available":  _CLAUDE_AVAILABLE,
+        "claude_available":  _claude_active(),
         "vader_available":   _SENT_OK,
         "macro_available":   _MACRO_OK,
         "memory_available":  _MEM_OK,
-        "model":             "claude-sonnet-4-5" if _CLAUDE_AVAILABLE else "statistical-fallback",
+        "model":             "claude-sonnet-4-5" if _claude_active() else "statistical-fallback",
     }
