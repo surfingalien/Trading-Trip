@@ -4108,6 +4108,79 @@ const StockSearchView = ({ onAddToWatchlist, onAddToPortfolio, watchlist }) => {
    AI BRAIN VIEWS — Autonomous Investment Intelligence
    ============================================================ */
 
+// ── Shared ticker autocomplete input for AI Brain / Sentiment views ───────────
+const TickerAutocomplete = ({ value, onChange, onSelect, placeholder, className, style }) => {
+  const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [cursor, setCursor] = useState(-1);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    const q = value.trim();
+    if (!q) { setSuggestions([]); setOpen(false); return; }
+    const hits = localSearch(q, 6);
+    setSuggestions(hits);
+    setOpen(hits.length > 0);
+    setCursor(-1);
+  }, [value]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const pick = (item) => {
+    onChange(item.symbol);
+    setOpen(false);
+    setSuggestions([]);
+    onSelect?.(item.symbol);
+  };
+
+  const handleKey = (e) => {
+    if (!open || !suggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => Math.min(c + 1, suggestions.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => Math.max(c - 1, -1)); }
+    else if (e.key === 'Enter') {
+      if (cursor >= 0) { e.preventDefault(); pick(suggestions[cursor]); }
+      else { setOpen(false); onSelect?.(value.trim().toUpperCase()); }
+    }
+    else if (e.key === 'Escape') setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative flex-1">
+      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.textFaint }} />
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value.toUpperCase())}
+        onKeyDown={handleKey}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        placeholder={placeholder}
+        className={className}
+        style={style}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border shadow-xl overflow-hidden"
+          style={{ background: C.surface2, borderColor: C.border }}>
+          {suggestions.map((item, i) => (
+            <button key={item.symbol} onMouseDown={() => pick(item)}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
+              style={{ background: i === cursor ? C.surface3 : 'transparent' }}>
+              <span className="font-mono font-bold text-sm w-14 shrink-0" style={{ color: C.gold }}>{item.symbol}</span>
+              <span className="text-sm truncate" style={{ color: C.text }}>{item.name}</span>
+              <span className="ml-auto text-xs shrink-0" style={{ color: C.textFaint }}>{item.exchange}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── AI Brain Report View ──────────────────────────────────────────────────────
 const AIBrainView = ({ portfolio }) => {
   const [sym, setSym] = useState('');
@@ -4195,17 +4268,14 @@ const AIBrainView = ({ portfolio }) => {
       {/* Search */}
       <div className="rounded-2xl border p-6" style={{ background: C.surface, borderColor: C.border }}>
         <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.textFaint }} />
-            <input
-              value={inputVal}
-              onChange={e => setInputVal(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === 'Enter' && fetchReport()}
-              placeholder="Enter ticker symbol (e.g. AAPL, NVDA, MSFT)"
-              className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
-              style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }}
-            />
-          </div>
+          <TickerAutocomplete
+            value={inputVal}
+            onChange={setInputVal}
+            onSelect={sym => { if (sym) { setSym(sym); setInputVal(sym); fetchReport(sym); } }}
+            placeholder="Search by ticker or company name (e.g. Apple, NVDA, MSFT)"
+            className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
+            style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }}
+          />
           <button onClick={() => fetchReport()}
             disabled={loading || !inputVal.trim()}
             className="px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all"
@@ -4697,14 +4767,14 @@ const SentimentView = ({ portfolio }) => {
 
       <div className="rounded-2xl border p-6" style={{ background: C.surface, borderColor: C.border }}>
         <div className="flex gap-3 mb-4">
-          <div className="flex-1 relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.textFaint }} />
-            <input value={inputVal} onChange={e => setInputVal(e.target.value.toUpperCase())}
-              onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) fetchSentiment(); }}
-              placeholder="Enter symbol (e.g. AAPL, NVDA)"
-              className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
-              style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }} />
-          </div>
+          <TickerAutocomplete
+            value={inputVal}
+            onChange={setInputVal}
+            onSelect={sym => { if (sym) { setSym(sym); setInputVal(sym); fetchSentiment(sym); } }}
+            placeholder="Search by ticker or company name (e.g. Apple, NVDA)"
+            className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
+            style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }}
+          />
           <button
             onClick={() => { if (inputVal.trim()) fetchSentiment(); }}
             disabled={loading}

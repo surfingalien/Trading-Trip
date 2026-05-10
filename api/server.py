@@ -89,7 +89,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_origin_regex=r"^https://([a-z0-9-]+\.)*vercel\.app$",
-    allow_methods=["GET", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=True,
 )
@@ -415,8 +415,8 @@ async def quotes(symbols: str = Query(..., description="Comma-separated symbols"
                     "change_pct":          round(float(((info.last_price or 0) / (info.previous_close or 1) - 1) * 100), 2),
                     "volume":              int(info.three_month_average_volume or 0),
                     "market_cap":          float(info.market_cap or 0),
-                    "fifty_two_week_high": float(info.fifty_two_week_high or 0),
-                    "fifty_two_week_low":  float(info.fifty_two_week_low  or 0),
+                    "fifty_two_week_high": float(getattr(info, 'year_high', None) or getattr(info, 'fifty_two_week_high', None) or 0),
+                    "fifty_two_week_low":  float(getattr(info, 'year_low',  None) or getattr(info, 'fifty_two_week_low',  None) or 0),
                 }
             return await _yf_fetch(_get, timeout=10.0)
         except Exception as exc:
@@ -520,8 +520,8 @@ async def fundamentals(symbol: str = Path(...)):
                 "recommendation":  info.get("recommendationKey", ""),
                 "num_analysts":    int(_f("numberOfAnalystOpinions")),
                 # Technical
-                "fifty_two_week_high": float(fi.fifty_two_week_high or 0),
-                "fifty_two_week_low":  float(fi.fifty_two_week_low  or 0),
+                "fifty_two_week_high": float(getattr(fi, 'year_high', None) or getattr(fi, 'fifty_two_week_high', None) or 0),
+                "fifty_two_week_low":  float(getattr(fi, 'year_low',  None) or getattr(fi, 'fifty_two_week_low',  None) or 0),
                 "avg_volume":          float(_f("averageVolume")),
                 "short_ratio":         round(_f("shortRatio"), 2),
             }
