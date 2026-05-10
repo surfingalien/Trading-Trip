@@ -430,7 +430,4 @@ def get_brain_status() -> dict:
         "macro_available":   _MACRO_OK,
         "memory_available":  _MEM_OK,
         "model":             "claude-sonnet-4-5" if active else "statistical-fallback",
-        "sdk_available":     _ANTHROPIC_SDK_AVAILABLE,
-        "key_set":           bool(_get_api_key()),
-        "deploy_v":          "v2-dynamic",
     }

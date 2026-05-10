@@ -4131,7 +4131,7 @@ const AIBrainView = ({ portfolio }) => {
   }, []);
 
   const fetchReport = async (symbol) => {
-    const s = (symbol || inputVal).trim().toUpperCase();
+    const s = (typeof symbol === 'string' ? symbol : inputVal).trim().toUpperCase();
     if (!s) return;
     setSym(s); setLoading(true); setError(null); setReport(null); setForecasts(null);
     try {
@@ -4142,12 +4142,23 @@ const AIBrainView = ({ portfolio }) => {
       );
       setReport(rep);
       setError(null);
+      // Also refresh brain status after report (picks up claude_available changes)
+      apiFetch('/api/brain/status').then(setBrainStatus).catch(() => {});
       // Fetch forecasts separately so they don't block the report
       apiFetch(`/api/brain/forecast-all/${s}`, {}, { onWarmup: () => {} })
         .then(fc => setForecasts(fc))
         .catch(() => {});
     } catch (e) {
-      if (e.message !== 'warming_up') setError(e.message);
+      const raw = e.message || '';
+      if (raw === 'warming_up') return; // already shown via onWarmup
+      // Map raw API errors to friendly messages
+      if (raw.startsWith('API 5')) {
+        setError(`Analysis failed for ${s}. The server encountered an error — please retry.`);
+      } else if (raw.includes('too long') || raw.includes('warming')) {
+        setError('Server is starting up. Please wait 30 seconds and try again.');
+      } else {
+        setError(`Could not load report for ${s}. Please try again.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -4236,10 +4247,19 @@ const AIBrainView = ({ portfolio }) => {
 
       {/* Error state */}
       {error && error !== 'warming_up' && (
-        <div className="rounded-2xl border p-5 flex items-center gap-3"
+        <div className="rounded-2xl border p-5 flex items-center justify-between gap-3"
           style={{ background: C.surface, borderColor: C.neg + '40' }}>
-          <AlertCircle size={18} style={{ color: C.neg }} />
-          <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+          <div className="flex items-center gap-3">
+            <AlertCircle size={18} style={{ color: C.neg }} />
+            <p className="text-sm" style={{ color: C.neg }}>{error}</p>
+          </div>
+          {sym && (
+            <button onClick={() => fetchReport(sym)}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0"
+              style={{ background: C.gold + '20', color: C.gold, border: `1px solid ${C.gold}40` }}>
+              <RefreshCw size={12} /> Retry
+            </button>
+          )}
         </div>
       )}
 

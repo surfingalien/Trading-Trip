@@ -1322,12 +1322,6 @@ async def brain_status():
         }
     result = await _yf_fetch(get_brain_status, timeout=5.0)
     result["brain_available"] = True
-    # Debug: show any env var names containing "ANTHROP" or "CLAUDE" or "API_KEY"
-    import os as _os
-    result["env_keys_found"] = [
-        k for k in _os.environ
-        if any(x in k.upper() for x in ("ANTHROP", "CLAUDE", "API_KEY"))
-    ]
     return result
 
 
