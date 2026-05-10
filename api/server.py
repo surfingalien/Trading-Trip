@@ -1339,7 +1339,7 @@ async def brain_report(
     sym = symbol.upper()
     try:
         report = await _yf_fetch(
-            lambda: generate_report(sym, include_macro=include_macro, use_cache=use_cache),
+            lambda: _brain_report(sym, include_macro=include_macro, use_cache=use_cache),
             timeout=45.0,
         )
         return report
