@@ -330,13 +330,9 @@ Return ONLY valid JSON matching this exact schema (no markdown, no extra keys):
 }}"""
 
     resp = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
-        system=[{
-            "type": "text",
-            "text": system_prompt,
-            "cache_control": {"type": "ephemeral"},
-        }],
+        system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
 
@@ -393,13 +389,16 @@ def generate_report(symbol: str, include_macro: bool = True, use_cache: bool = T
     mem  = get_memory(sym) if _MEM_OK else {}
 
     # ── Generate report ───────────────────────────────────────────────────────
-    try:
-        if _claude_active():
+    fallback_reason: str | None = None
+    if _claude_active():
+        try:
             report = _claude_report(sym, ta, fund, sent, macro, mem)
-        else:
+        except Exception as exc:
+            fallback_reason = f"{type(exc).__name__}: {exc}"
+            log.warning("Claude report failed for %s (%s), using statistical fallback", sym, exc)
             report = _statistical_report(sym, ta, fund, sent, macro)
-    except Exception as exc:
-        log.warning("Claude report failed for %s (%s), using statistical fallback", sym, exc)
+            report["fallback_reason"] = fallback_reason
+    else:
         report = _statistical_report(sym, ta, fund, sent, macro)
 
     report["from_cache"] = False
@@ -429,5 +428,5 @@ def get_brain_status() -> dict:
         "vader_available":   _SENT_OK,
         "macro_available":   _MACRO_OK,
         "memory_available":  _MEM_OK,
-        "model":             "claude-sonnet-4-5" if active else "statistical-fallback",
+        "model":             "claude-sonnet-4-6" if active else "statistical-fallback",
     }
