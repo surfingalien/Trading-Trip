@@ -1,0 +1,7 @@
+# Backend lives on Render, not Vercel
+api/
+backend/
+*.py
+requirements.txt
+pyproject.toml
+*.toml
