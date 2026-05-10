@@ -1390,7 +1390,11 @@ async def brain_forecast(
         raise HTTPException(500, str(exc))
 
 
-from pydantic import BaseModel as _BaseModel
+# BaseModel already imported via fastapi/pydantic above; just alias here
+try:
+    from pydantic import BaseModel as _BaseModel
+except ImportError:
+    _BaseModel = object  # type: ignore
 
 class _PortfolioOptReq(_BaseModel):
     symbols: List[str]

@@ -88,7 +88,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .no-tap { -webkit-tap-highlight-color: transparent; }
 .tooltip-card { background: var(--surface-2); border: 1px solid var(--border-light); border-radius: 8px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 
-.sidebar { width: 280px; flex-shrink: 0; }
+.sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .main { flex: 1; min-width: 0; }
 
 @media (max-width: 768px) {
@@ -1089,7 +1089,7 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
   ];
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col border-r" style={{ background: C.ink, borderColor: C.border }}>
+    <aside className="w-full flex-1 flex flex-col border-r overflow-hidden" style={{ background: C.ink, borderColor: C.border }}>
       <div className="px-6 py-6 border-b" style={{ borderColor: C.border }}>
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-md flex items-center justify-center font-serif text-lg"
@@ -2848,7 +2848,14 @@ async function apiFetch(path, opts = {}, { onWarmup } = {}) {
       onWarmup?.();
       // Server is cold-starting — wait 15s then retry with a longer window
       await new Promise(res => setTimeout(res, 15_000));
-      return await _doFetch(path, opts, 60_000);
+      try {
+        return await _doFetch(path, opts, 60_000);
+      } catch (e2) {
+        if (e2.isWarmup) {
+          throw new Error('Server is taking too long to start. Please wait 30 seconds and try again.');
+        }
+        throw e2;
+      }
     }
     throw e;
   }
@@ -4128,16 +4135,19 @@ const AIBrainView = ({ portfolio }) => {
     if (!s) return;
     setSym(s); setLoading(true); setError(null); setReport(null); setForecasts(null);
     try {
-      const [rep, fc] = await Promise.all([
-        apiFetch(`/api/brain/report/${s}?include_macro=true&use_cache=false`,
-          {}, { onWarmup: () => setError('warming_up') }),
-        apiFetch(`/api/brain/forecast-all/${s}`, {}, { onWarmup: () => {} }).catch(() => null),
-      ]);
+      const rep = await apiFetch(
+        `/api/brain/report/${s}?include_macro=true&use_cache=false`,
+        {},
+        { onWarmup: () => setError('warming_up') }
+      );
       setReport(rep);
-      setForecasts(fc);
       setError(null);
+      // Fetch forecasts separately so they don't block the report
+      apiFetch(`/api/brain/forecast-all/${s}`, {}, { onWarmup: () => {} })
+        .then(fc => setForecasts(fc))
+        .catch(() => {});
     } catch (e) {
-      setError(e.message);
+      if (e.message !== 'warming_up') setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -4453,10 +4463,14 @@ const MacroRadarView = () => {
   const fetchMacro = async () => {
     setLoading(true); setError(null);
     try {
-      const data = await apiFetch('/api/brain/macro', {}, { onWarmup: () => {} });
+      const data = await apiFetch('/api/brain/macro', {}, {
+        onWarmup: () => setError('warming_up'),
+      });
       setMacro(data);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+      setError(null);
+    } catch (e) {
+      if (e.message !== 'warming_up') setError(e.message);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchMacro(); }, []);
@@ -4542,11 +4556,23 @@ const MacroRadarView = () => {
         </div>
       )}
 
-      {error && (
+      {error === 'warming_up' && (
+        <div className="rounded-2xl border p-5 flex items-center gap-4"
+          style={{ background: C.surface, borderColor: C.gold + '40' }}>
+          <RefreshCw size={18} className="spin shrink-0" style={{ color: C.gold }} />
+          <div>
+            <p className="font-semibold text-sm" style={{ color: C.gold }}>Backend warming up…</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>Render free tier cold start (~30 sec). Retrying automatically.</p>
+          </div>
+        </div>
+      )}
+      {error && error !== 'warming_up' && (
         <div className="rounded-xl border p-4 flex items-center gap-2"
           style={{ borderColor: C.neg + '30', color: C.neg }}>
           <AlertCircle size={14} />
           <span className="text-sm">{error}</span>
+          <button onClick={fetchMacro} className="ml-auto text-xs px-2 py-1 rounded"
+            style={{ background: C.surface2, color: C.gold }}>Retry</button>
         </div>
       )}
 
@@ -4599,19 +4625,25 @@ const SentimentView = ({ portfolio }) => {
   const [inputVal, setInputVal] = useState('');
   const [sentiment, setSentiment] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
   const [batchResults, setBatchResults] = useState([]);
   const [batchLoading, setBatchLoading] = useState(false);
 
   const fetchSentiment = async (symbol) => {
-    const s = (symbol || inputVal).trim().toUpperCase();
+    const s = ((typeof symbol === 'string' ? symbol : '') || inputVal).trim().toUpperCase();
     if (!s) return;
-    setSym(s); setLoading(true); setError(null); setSentiment(null);
+    setSym(s); setLoading(true); setWarmingUp(false); setError(null); setSentiment(null);
     try {
-      const data = await apiFetch(`/api/brain/sentiment/${s}`, {}, { onWarmup: () => {} });
+      const data = await apiFetch(`/api/brain/sentiment/${s}`, {}, {
+        onWarmup: () => setWarmingUp(true),
+      });
       setSentiment(data);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+      setWarmingUp(false);
+    } catch (e) {
+      setWarmingUp(false);
+      setError(e.message);
+    } finally { setLoading(false); }
   };
 
   const fetchBatch = async () => {
@@ -4648,16 +4680,18 @@ const SentimentView = ({ portfolio }) => {
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.textFaint }} />
             <input value={inputVal} onChange={e => setInputVal(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === 'Enter' && fetchSentiment()}
-              placeholder="Symbol (e.g. AAPL)"
+              onKeyDown={e => { if (e.key === 'Enter' && inputVal.trim()) fetchSentiment(); }}
+              placeholder="Enter symbol (e.g. AAPL, NVDA)"
               className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm font-mono"
               style={{ background: C.surface2, borderColor: C.border, color: C.text, outline: 'none' }} />
           </div>
-          <button onClick={() => fetchSentiment()} disabled={loading || !inputVal.trim()}
+          <button
+            onClick={() => { if (inputVal.trim()) fetchSentiment(); }}
+            disabled={loading}
             className="px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2"
-            style={{ background: C.gold, color: C.ink, opacity: !inputVal.trim() ? 0.5 : 1 }}>
+            style={{ background: C.gold, color: C.ink, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {loading ? <RefreshCw size={15} className="spin" /> : <Newspaper size={15} />}
-            Analyze
+            {loading ? 'Analyzing…' : 'Analyze'}
           </button>
           {portfolio?.positions?.length > 0 && (
             <button onClick={fetchBatch} disabled={batchLoading}
@@ -4668,7 +4702,41 @@ const SentimentView = ({ portfolio }) => {
             </button>
           )}
         </div>
+        {/* Quick picks */}
+        {portfolio?.positions?.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs" style={{ color: C.textFaint }}>Quick:</span>
+            {portfolio.positions.slice(0, 8).map(p => (
+              <button key={p.symbol}
+                onClick={() => { setInputVal(p.symbol); fetchSentiment(p.symbol); }}
+                className="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold"
+                style={{ background: C.surface2, color: C.gold, border: `1px solid ${C.border}` }}>
+                {p.symbol}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {warmingUp && (
+        <div className="rounded-2xl border p-5 flex items-center gap-4"
+          style={{ background: C.surface, borderColor: C.gold + '40' }}>
+          <RefreshCw size={18} className="spin shrink-0" style={{ color: C.gold }} />
+          <div>
+            <p className="font-semibold text-sm" style={{ color: C.gold }}>Backend warming up…</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>Render free tier cold start (~30 sec). Retrying automatically.</p>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border p-4 flex items-center gap-2"
+          style={{ borderColor: C.neg + '30', color: C.neg }}>
+          <AlertCircle size={14} />
+          <span className="text-sm">{error}</span>
+          <button onClick={() => fetchSentiment()} className="ml-auto text-xs px-2 py-1 rounded"
+            style={{ background: C.surface2, color: C.gold }}>Retry</button>
+        </div>
+      )}
 
       {/* Single symbol result */}
       {sentiment && (
@@ -4777,30 +4845,34 @@ const PortfolioOptimizerView = ({ portfolio }) => {
   const [result, setResult] = useState(null);
   const [corr, setCorr] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
 
   const CHART_COLORS = ['#d4a945','#5fa872','#6f8fb8','#c97049','#a78bfa','#f472b6','#34d399','#fb923c'];
 
   const runOptimize = async () => {
     if (!portfolio?.positions?.length) return;
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setWarmingUp(false); setError(null); setResult(null); setCorr(null);
     const syms = portfolio.positions.map(p => p.symbol);
     const currentWeights = {};
     portfolio.positions.forEach(p => {
       currentWeights[p.symbol] = p.value / (portfolio.value || 1);
     });
     try {
-      const [opt, corrData] = await Promise.all([
-        apiFetch('/api/brain/portfolio/optimize', {
-          method: 'POST',
-          body: JSON.stringify({ symbols: syms, current_weights: currentWeights }),
-        }, { onWarmup: () => {} }),
-        apiFetch(`/api/brain/portfolio/correlations?symbols=${syms.join(',')}`, {}, { onWarmup: () => {} }).catch(() => null),
-      ]);
+      const opt = await apiFetch('/api/brain/portfolio/optimize', {
+        method: 'POST',
+        body: JSON.stringify({ symbols: syms, current_weights: currentWeights }),
+      }, { onWarmup: () => setWarmingUp(true) });
       setResult(opt);
-      setCorr(corrData);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+      setWarmingUp(false);
+      // Fetch correlations separately
+      apiFetch(`/api/brain/portfolio/correlations?symbols=${syms.join(',')}`, {}, { onWarmup: () => {} })
+        .then(c => setCorr(c))
+        .catch(() => {});
+    } catch (e) {
+      setWarmingUp(false);
+      setError(e.message);
+    } finally { setLoading(false); }
   };
 
   const corrColor = (v) => {
@@ -4842,10 +4914,23 @@ const PortfolioOptimizerView = ({ portfolio }) => {
         </div>
       )}
 
+      {warmingUp && (
+        <div className="rounded-2xl border p-5 flex items-center gap-4"
+          style={{ background: C.surface, borderColor: C.gold + '40' }}>
+          <RefreshCw size={18} className="spin shrink-0" style={{ color: C.gold }} />
+          <div>
+            <p className="font-semibold text-sm" style={{ color: C.gold }}>Backend warming up…</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>Render free tier cold start (~30 sec). Retrying — optimization will run automatically.</p>
+          </div>
+        </div>
+      )}
       {error && (
-        <div className="rounded-xl border p-4 flex items-center gap-2"
+        <div className="rounded-xl border p-4 flex items-center gap-3"
           style={{ borderColor: C.neg + '30', color: C.neg }}>
-          <AlertCircle size={14} /><span className="text-sm">{error}</span>
+          <AlertCircle size={14} shrink-0 />
+          <span className="text-sm flex-1">{error}</span>
+          <button onClick={runOptimize} className="text-xs px-3 py-1 rounded shrink-0"
+            style={{ background: C.surface2, color: C.gold }}>Retry</button>
         </div>
       )}
 
@@ -4980,6 +5065,7 @@ const PortfolioOptimizerView = ({ portfolio }) => {
 const AlertCenterView = ({ portfolio, watchlist }) => {
   const [alertData, setAlertData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
 
   const allSymbols = useMemo(() => {
@@ -4992,15 +5078,19 @@ const AlertCenterView = ({ portfolio, watchlist }) => {
 
   const fetchAlerts = async () => {
     if (!allSymbols.length) return;
-    setLoading(true); setError(null);
+    setLoading(true); setWarmingUp(false); setError(null);
     try {
       const data = await apiFetch(
         `/api/brain/alerts?symbols=${allSymbols.join(',')}`,
-        {}, { onWarmup: () => {} }
+        {},
+        { onWarmup: () => setWarmingUp(true) }
       );
       setAlertData(data);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
+      setWarmingUp(false);
+    } catch (e) {
+      setWarmingUp(false);
+      setError(e.message);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchAlerts(); }, [allSymbols.join(',')]);
@@ -5064,14 +5154,27 @@ const AlertCenterView = ({ portfolio, watchlist }) => {
         </div>
       )}
 
+      {warmingUp && (
+        <div className="rounded-2xl border p-5 flex items-center gap-4"
+          style={{ background: C.surface, borderColor: C.gold + '40' }}>
+          <RefreshCw size={18} className="spin shrink-0" style={{ color: C.gold }} />
+          <div>
+            <p className="font-semibold text-sm" style={{ color: C.gold }}>Backend warming up…</p>
+            <p className="text-xs mt-0.5" style={{ color: C.textDim }}>Render free tier cold start (~30 sec). Alert scan will run automatically.</p>
+          </div>
+        </div>
+      )}
       {error && (
-        <div className="rounded-xl border p-4 flex items-center gap-2"
+        <div className="rounded-xl border p-4 flex items-center gap-3"
           style={{ borderColor: C.neg + '30', color: C.neg }}>
-          <AlertCircle size={14} /><span className="text-sm">{error}</span>
+          <AlertCircle size={14} className="shrink-0" />
+          <span className="text-sm flex-1">{error}</span>
+          <button onClick={fetchAlerts} className="text-xs px-3 py-1 rounded shrink-0"
+            style={{ background: C.surface2, color: C.gold }}>Retry</button>
         </div>
       )}
 
-      {loading && !alertData && (
+      {(loading || warmingUp) && !alertData && !error && (
         <div className="rounded-2xl border p-8 text-center"
           style={{ background: C.surface, borderColor: C.border }}>
           <RefreshCw size={24} className="spin mx-auto mb-3" style={{ color: C.gold }} />
