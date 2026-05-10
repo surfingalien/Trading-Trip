@@ -70,16 +70,39 @@ def fetch_sentiment(symbol: str) -> dict:
         _cache[sym] = (now, result)
         return result
 
+    # yfinance changed its news format in 0.2.50+:
+    #   Old format: {"title": "...", "publisher": "...", "providerPublishTime": 123}
+    #   New format: {"id": "...", "content": {"title": "...", "pubDate": "...", "provider": {"displayName": "..."}}}
+    # We support both.
+    def _parse_news_item(item: dict) -> tuple[str, str, str]:
+        """Return (title, publisher, pub_dt) for either format."""
+        # New nested format
+        content = item.get("content") or {}
+        if content:
+            title = content.get("title", "")
+            publisher = (content.get("provider") or {}).get("displayName", "Unknown")
+            pub_date = content.get("pubDate", "")
+            # pubDate is ISO string like "2025-01-15T10:30:00Z"
+            try:
+                from datetime import datetime as _dt
+                pub_dt = _dt.fromisoformat(pub_date.replace("Z", "+00:00")).strftime("%b %d %H:%M") if pub_date else ""
+            except Exception:
+                pub_dt = pub_date[:10] if pub_date else ""
+        else:
+            # Old flat format
+            title = item.get("title", "")
+            publisher = item.get("publisher", "Unknown")
+            ts = item.get("providerPublishTime", 0)
+            pub_dt = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%b %d %H:%M") if ts else ""
+        return title, publisher, pub_dt
+
     # Score each headline
     scored: list[dict] = []
     for item in news_items[:15]:
-        title = item.get("title", "")
+        title, publisher, pub_dt = _parse_news_item(item)
         if not title:
             continue
         compound = _score_headline(title)
-        publisher = item.get("publisher", "Unknown")
-        ts = item.get("providerPublishTime", 0)
-        pub_dt = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%b %d %H:%M") if ts else ""
         scored.append({
             "title":     title,
             "publisher": publisher,
@@ -87,6 +110,37 @@ def fetch_sentiment(symbol: str) -> dict:
             "compound":  round(compound, 4),
             "label":     "bullish" if compound > 0.05 else ("bearish" if compound < -0.05 else "neutral"),
         })
+
+    # If yfinance returned nothing at all, fall back to Yahoo Finance RSS
+    if not scored and not news_items:
+        try:
+            import urllib.request
+            import xml.etree.ElementTree as ET
+            url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}&region=US&lang=en-US"
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                tree = ET.parse(resp)
+            ns = {"dc": "http://purl.org/dc/elements/1.1/"}
+            for item_el in tree.findall(".//item")[:15]:
+                title = (item_el.findtext("title") or "").strip()
+                publisher = item_el.findtext("dc:creator", namespaces=ns) or "Yahoo Finance"
+                pub_raw = item_el.findtext("pubDate") or ""
+                try:
+                    from email.utils import parsedate_to_datetime
+                    pub_dt = parsedate_to_datetime(pub_raw).strftime("%b %d %H:%M") if pub_raw else ""
+                except Exception:
+                    pub_dt = ""
+                if not title:
+                    continue
+                compound = _score_headline(title)
+                scored.append({
+                    "title":     title,
+                    "publisher": publisher,
+                    "published": pub_dt,
+                    "compound":  round(compound, 4),
+                    "label":     "bullish" if compound > 0.05 else ("bearish" if compound < -0.05 else "neutral"),
+                })
+        except Exception as rss_exc:
+            log.warning("RSS fallback failed for %s: %s", sym, rss_exc)
 
     if not scored:
         result = {
