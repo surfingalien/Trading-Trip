@@ -98,6 +98,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: none; }
   .overlay.open { display: block; }
 }
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+  .overflow-x-auto table { min-width: 600px; }
+  .recharts-wrapper { font-size: 10px; }
+}
 `;
 
 const C = {
@@ -1157,14 +1162,14 @@ const Sidebar = ({ active, setActive, apiStatus, lastUpdated, errorMsg }) => {
 };
 
 const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, apiStatus, hasApiKey, onSettings, onToggleSidebar }) => (
-  <header className="h-16 px-8 flex items-center justify-between border-b shrink-0"
+  <header className="h-16 px-4 sm:px-8 flex items-center justify-between border-b shrink-0"
     style={{ background: C.ink, borderColor: C.border }}>
     <div className="flex items-center gap-4">
       <button onClick={onToggleSidebar} className="md:hidden p-2 rounded-lg no-tap"
         style={{ color: C.textDim }}>
         <Menu size={20} />
       </button>
-      <button className="flex items-center gap-3 w-80 px-4 py-2 rounded-lg text-sm border transition-all no-tap"
+      <button className="hidden sm:flex items-center gap-3 w-80 px-4 py-2 rounded-lg text-sm border transition-all no-tap"
         style={{ background: C.surface, borderColor: C.border, color: C.textFaint }}>
         <Search size={15} strokeWidth={1.8} />
         <span>Search ticker, company, or sector…</span>
@@ -1173,7 +1178,7 @@ const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, api
       </button>
 
       {!hasApiKey && (
-        <button onClick={onSettings} className="px-3 py-2 rounded-lg flex items-center gap-2 text-xs no-tap"
+        <button onClick={onSettings} className="hidden sm:flex px-3 py-2 rounded-lg items-center gap-2 text-xs no-tap"
           style={{ background: 'rgba(212,169,69,0.10)', color: C.gold, border: '1px solid rgba(212,169,69,0.25)' }}>
           <Key size={13} /> Add API key for live data
         </button>
@@ -1181,7 +1186,7 @@ const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, api
     </div>
 
     <div className="flex items-center gap-4">
-      <div className="text-right">
+      <div className="hidden sm:block text-right">
         <div className="text-[10px] uppercase tracking-[0.2em]" style={{ color: C.textFaint }}>Portfolio</div>
         <div className="flex items-baseline gap-3 mt-0.5">
           <span className="serif-num text-2xl" style={{ color: C.text }}>{fmt.dollar(portfolioValue, 2)}</span>
@@ -1197,7 +1202,7 @@ const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, api
       </button>
 
       <button onClick={onAdd} className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2 text-sm no-tap">
-        <Plus size={15} strokeWidth={2.2} /> Add Transaction
+        <Plus size={15} strokeWidth={2.2} /><span className="hidden sm:inline">Add Transaction</span>
       </button>
 
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-medium text-sm border"
@@ -1216,7 +1221,7 @@ const HeroStats = ({ portfolio, cash }) => {
     { label: 'Cash Position',   value: fmt.dollar(cash.value, 2), sub: `${cash.label} · ${cash.apy}% APY`, tone: 'neutral' },
   ];
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
       {stats.map((s, i) => (
         <Card key={i} className="p-5 fade-in" style={{ animationDelay: `${i * 60}ms` }}>
           <div className="text-[10px] uppercase tracking-[0.18em] mb-2" style={{ color: C.textFaint }}>{s.label}</div>
@@ -1297,7 +1302,7 @@ const TopMovers = ({ positions }) => {
   return (
     <Card className="p-6">
       <SectionLabel accent="Today">Top Movers</SectionLabel>
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={13} style={{ color: C.pos }} />
@@ -1395,7 +1400,7 @@ const DashboardView = ({ portfolio, cash, recs, onViewRecs }) => (
     </div>
     <HeroStats portfolio={portfolio} cash={cash} />
     <PerformanceSection portfolio={portfolio} />
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <TopMovers positions={portfolio.positions} />
       <RecommendationsPreview recs={recs} onViewAll={onViewRecs} />
     </div>
@@ -1569,7 +1574,7 @@ const WatchlistView = ({ watchlist, prices, onSelectStock, onAddToPortfolio, onR
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {enriched.map((s, i) => {
           const positive = s.price >= s.prevClose;
           const flash = flashes[s.symbol];
@@ -1698,7 +1703,7 @@ const RecommendationsView = ({ recs }) => {
       </div>
 
       {filter === 'all' && (
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {Object.values(PERSONAS).map((p, i) => {
             const Icon = p.icon;
             const personaRecs = recs.filter(r => r.persona === p.id);
@@ -1818,7 +1823,7 @@ const RetirementView = ({ portfolioValue, profile, setProfile }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="p-5">
           <div className="text-[10px] uppercase tracking-[0.18em] mb-2" style={{ color: C.textFaint }}>Years to Retirement</div>
           <div className="serif-num text-3xl" style={{ color: C.gold }}>{calc.yearsToRetirement}</div>
@@ -1849,7 +1854,7 @@ const RetirementView = ({ portfolioValue, profile, setProfile }) => {
 
       <Card className="p-6">
         <SectionLabel>Your Profile</SectionLabel>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
           {[
             { key: 'currentAge', label: 'Current Age', min: 20, max: 75, step: 1, format: v => v },
             { key: 'retirementAge', label: 'Retirement Age', min: profile.currentAge + 1, max: 80, step: 1, format: v => v },
@@ -1925,7 +1930,7 @@ const RetirementView = ({ portfolioValue, profile, setProfile }) => {
           </ComposedChart>
         </ResponsiveContainer>
 
-        <div className="grid grid-cols-5 gap-3 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-4">
           {[
             { label: '10th (Bear)',   key: 'p10', tone: 'neg' },
             { label: '25th',          key: 'p25', tone: 'gold' },
@@ -1950,7 +1955,7 @@ const RetirementView = ({ portfolioValue, profile, setProfile }) => {
       <Card className="p-6">
         <SectionLabel accent={`Optimal: ${ssAnalysis.optimalStrategy}`}>Social Security Optimization</SectionLabel>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {ssAnalysis.strategies.map((s, i) => {
             const isOptimal = s.name === ssAnalysis.optimalStrategy;
             return (
@@ -2087,7 +2092,7 @@ const AnalyticsView = ({ portfolio, cash }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {metrics.map((m, i) => {
           const Icon = m.icon;
           return (
@@ -2151,7 +2156,7 @@ const AnalyticsView = ({ portfolio, cash }) => {
         </ResponsiveContainer>
       </Card>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="p-6">
           <SectionLabel>Sector Allocation</SectionLabel>
           <SectorBars data={sectorAlloc.data} total={sectorAlloc.total} />
@@ -2164,7 +2169,7 @@ const AnalyticsView = ({ portfolio, cash }) => {
 
       <Card className="p-6">
         <SectionLabel>Position Contributors · Lifetime</SectionLabel>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
           {[...portfolio.positions].sort((a, b) => b.totalReturn - a.totalReturn).map((h, i) => {
             const totalReturnSum = portfolio.positions.reduce((s, p) => s + Math.abs(p.totalReturn), 0);
             const pct = (Math.abs(h.totalReturn) / totalReturnSum) * 100;
@@ -2560,7 +2565,7 @@ const StockDetailPanel = ({ symbol, prices, holdings, onClose, onAddTransaction 
   return (
     <>
       <div className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
-      <div className="fixed top-0 right-0 bottom-0 w-[520px] z-50 slide-in-r overflow-y-auto"
+      <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[520px] z-50 slide-in-r overflow-y-auto"
         style={{ background: C.surface, borderLeft: `1px solid ${C.borderL}` }}>
 
         <div className="sticky top-0 z-10 px-6 py-5 flex items-center justify-between border-b backdrop-blur-md"
@@ -2601,7 +2606,7 @@ const StockDetailPanel = ({ symbol, prices, holdings, onClose, onAddTransaction 
                   {((holding.shares * p.price) / 70000 * 100).toFixed(1)}% of portfolio
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider" style={{ color: C.textFaint }}>Shares · Avg Cost</div>
                   <div className="font-mono text-sm tnum mt-1" style={{ color: C.text }}>
@@ -2651,7 +2656,7 @@ const StockDetailPanel = ({ symbol, prices, holdings, onClose, onAddTransaction 
 
           <div>
             <div className="text-xs uppercase tracking-[0.18em] mb-3" style={{ color: C.textDim }}>Key Stats</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {stats.map(s => (
                 <div key={s.label} className="p-3 rounded-md" style={{ background: C.surface2 }}>
                   <div className="text-[10px] uppercase tracking-wider" style={{ color: C.textFaint }}>{s.label}</div>
@@ -2663,7 +2668,7 @@ const StockDetailPanel = ({ symbol, prices, holdings, onClose, onAddTransaction 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
             <button onClick={() => onAddTransaction(symbol, 'buy')}
               className="btn-primary px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-sm no-tap">
               <Plus size={14} strokeWidth={2.2} /> Buy {symbol}
@@ -2764,7 +2769,7 @@ const TransactionModal = ({ open, prefilledSymbol, prefilledType, prices, holdin
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] uppercase tracking-[0.15em] block mb-1.5" style={{ color: C.textFaint }}>Shares</label>
                 <input type="number" value={shares} onChange={(e) => setShares(e.target.value)}
@@ -3273,7 +3278,7 @@ const TradingTipsView = ({ portfolio }) => {
       )}
 
       {loading && !warmingUp && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => <div key={i} className="h-32 rounded-xl skeleton" />)}
         </div>
       )}
@@ -3638,7 +3643,7 @@ const PredictionView = ({ portfolio }) => {
           </div>
 
           {/* Upside probabilities */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               { label: 'P(Up > 5%)', val: prediction.prob_up_5pct },
               { label: 'P(Up > 10%)', val: prediction.prob_up_10pct },
@@ -3828,7 +3833,7 @@ const StockSearchView = ({ onAddToWatchlist, onAddToPortfolio, watchlist }) => {
           )}
 
           {loadingQuote && !warmingUp && (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[1,2,3,4].map(i => <div key={i} className="h-20 rounded-xl skeleton" />)}
             </div>
           )}
@@ -5449,7 +5454,7 @@ export default function App() {
 
           <MarketRegimeBanner />
 
-          <main className="flex-1 overflow-y-auto px-8 py-8">
+          <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-8">
             <div className="max-w-7xl mx-auto">
               {view === 'dashboard' && (
                 <DashboardView portfolio={portfolio} cash={cash} recs={recs}
