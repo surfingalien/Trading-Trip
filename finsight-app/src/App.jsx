@@ -89,14 +89,22 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .tooltip-card { background: var(--surface-2); border: 1px solid var(--border-light); border-radius: 8px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 
 .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-.main { flex: 1; min-width: 0; }
+.main { flex: 1; min-width: 0; overflow-x: hidden; }
 
 @media (max-width: 768px) {
-  .sidebar { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 50; transition: left 0.3s ease; }
+  /* Sidebar: fixed offscreen, zero flex-width so .main fills 100vw */
+  .sidebar { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 50; transition: left 0.3s ease; width: 280px !important; flex: none !important; }
   .sidebar.open { left: 0; }
-  .main { margin-left: 0; }
+  /* Main fills the full width since sidebar is out of flow */
+  .main { margin-left: 0 !important; flex: 1 1 100% !important; width: 100vw !important; max-width: 100vw !important; overflow-x: hidden; }
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: none; }
   .overlay.open { display: block; }
+  .hide-mobile { display: none !important; }
+  .overflow-x-auto table { min-width: 600px; }
+  .recharts-wrapper { font-size: 10px; }
+  /* Prevent any child from blowing out the mobile viewport */
+  .main * { max-width: 100%; }
+  .main .recharts-wrapper { max-width: none; }
 }
 @media (max-width: 768px) {
   .hide-mobile { display: none !important; }
@@ -1194,7 +1202,7 @@ const TopBar = ({ portfolioValue, dayChange, dayChangePct, onAdd, onRefresh, api
         </div>
       </div>
 
-      <div className="h-8 w-px" style={{ background: C.border }} />
+      <div className="hidden sm:block h-8 w-px" style={{ background: C.border }} />
 
       <button onClick={onRefresh} disabled={apiStatus === 'loading'}
         className="btn-ghost p-2 rounded-lg no-tap" title="Refresh prices">
@@ -1225,7 +1233,7 @@ const HeroStats = ({ portfolio, cash }) => {
       {stats.map((s, i) => (
         <Card key={i} className="p-5 fade-in" style={{ animationDelay: `${i * 60}ms` }}>
           <div className="text-[10px] uppercase tracking-[0.18em] mb-2" style={{ color: C.textFaint }}>{s.label}</div>
-          <div className="serif-num text-3xl leading-none" style={{
+          <div className="serif-num text-xl sm:text-3xl leading-none truncate" style={{
             color: s.tone === 'gold' ? C.gold : s.tone === 'pos' ? C.pos : s.tone === 'neg' ? C.neg : C.text }}>
             {s.value}
           </div>
@@ -1254,7 +1262,7 @@ const PerformanceSection = ({ portfolio }) => {
         <div>
           <SectionLabel>Performance</SectionLabel>
           <div className="flex items-baseline gap-4">
-            <span className="serif-num text-4xl" style={{ color: C.text }}>{fmt.dollar(endVal, 2)}</span>
+            <span className="serif-num text-2xl sm:text-4xl" style={{ color: C.text }}>{fmt.dollar(endVal, 2)}</span>
             <ChangeIndicator value={change} percent={changePct} size="lg" />
           </div>
           <div className="mt-1 text-xs font-mono" style={{ color: C.textFaint }}>
@@ -1387,7 +1395,7 @@ const AllocationSection = ({ portfolio, cash }) => {
 const DashboardView = ({ portfolio, cash, recs, onViewRecs }) => (
   <div className="space-y-4">
     <div>
-      <div className="font-serif text-3xl mb-1" style={{ color: C.text }}>
+      <div className="font-serif text-xl sm:text-3xl mb-1" style={{ color: C.text }}>
         Welcome back, <span className="italic" style={{ color: C.gold }}>Suhas</span>
       </div>
       <div className="text-sm" style={{ color: C.textDim }}>
@@ -1446,7 +1454,7 @@ const HoldingsView = ({ portfolio, cash, onSelectStock, flashes }) => {
     <div className="space-y-4">
       <div className="flex items-end justify-between">
         <div>
-          <div className="font-serif text-3xl" style={{ color: C.text }}>Holdings</div>
+          <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Holdings</div>
           <div className="text-sm mt-1" style={{ color: C.textDim }}>
             {portfolio.positions.length} equity positions · {fmt.dollar(totalValue, 2)} market value
           </div>
@@ -1568,7 +1576,7 @@ const WatchlistView = ({ watchlist, prices, onSelectStock, onAddToPortfolio, onR
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-serif text-3xl" style={{ color: C.text }}>Watchlist</div>
+        <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Watchlist</div>
         <div className="text-sm mt-1" style={{ color: C.textDim }}>
           {watchlist.length} stocks tracked · Click to view details or add to portfolio
         </div>
@@ -1670,7 +1678,7 @@ const RecommendationsView = ({ recs }) => {
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-serif text-3xl" style={{ color: C.text }}>Recommendations</div>
+        <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Recommendations</div>
         <div className="text-sm mt-1" style={{ color: C.textDim }}>
           {recs.length} actionable insights from {Object.keys(PERSONAS).length} expert advisors analyzing your portfolio
         </div>
@@ -1817,7 +1825,7 @@ const RetirementView = ({ portfolioValue, profile, setProfile }) => {
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-serif text-3xl" style={{ color: C.text }}>Retirement Planning</div>
+        <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Retirement Planning</div>
         <div className="text-sm mt-1" style={{ color: C.textDim }}>
           Comprehensive analysis with Monte Carlo simulation, gap analysis, and Social Security optimization
         </div>
@@ -2086,7 +2094,7 @@ const AnalyticsView = ({ portfolio, cash }) => {
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-serif text-3xl" style={{ color: C.text }}>Analytics</div>
+        <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Analytics</div>
         <div className="text-sm mt-1" style={{ color: C.textDim }}>
           Risk decomposition, performance attribution, and benchmark comparison
         </div>
@@ -2232,7 +2240,7 @@ const NewsView = ({ portfolio }) => {
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-serif text-3xl" style={{ color: C.text }}>Market News</div>
+        <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Market News</div>
         <div className="text-sm mt-1" style={{ color: C.textDim }}>
           Curated from your holdings · Connect Finnhub for live news feed
         </div>
@@ -2303,7 +2311,7 @@ const NewsView = ({ portfolio }) => {
 const ActivityView = ({ transactions }) => (
   <div className="space-y-4">
     <div>
-      <div className="font-serif text-3xl" style={{ color: C.text }}>Activity</div>
+      <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Activity</div>
       <div className="text-sm mt-1" style={{ color: C.textDim }}>
         Transaction history · {transactions.length} total
       </div>
@@ -2396,7 +2404,7 @@ const SettingsView = ({ apiKey, setApiKey, apiStatus, errorMsg, demoMode, setDem
   return (
     <div className="space-y-4 max-w-3xl">
       <div>
-        <div className="font-serif text-3xl" style={{ color: C.text }}>Settings</div>
+        <div className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Settings</div>
         <div className="text-sm mt-1" style={{ color: C.textDim }}>
           Configure data sources, behavior, and display preferences
         </div>
@@ -3122,7 +3130,7 @@ const MarketRegimeBanner = () => {
   const pal = regimePalette[regime.regime] || regimePalette.range_bound;
 
   return (
-    <div className="px-8 pt-3">
+    <div className="px-4 sm:px-8 pt-3">
       <div className="rounded-lg border px-4 py-2.5 fade-in"
         style={{ background: pal.bg, borderColor: pal.border }}>
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
@@ -4251,7 +4259,7 @@ const AIBrainView = ({ portfolio }) => {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="font-serif text-3xl" style={{ color: C.text }}>AI Brain</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>AI Brain</h1>
           <p className="text-sm mt-1" style={{ color: C.textDim }}>
             Institutional-grade analysis powered by {brainStatus?.claude_available ? 'Claude AI' : 'quantitative models'}
           </p>
@@ -4597,7 +4605,7 @@ const MacroRadarView = () => {
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Macro Radar</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Macro Radar</h1>
           <p className="text-sm mt-1" style={{ color: C.textDim }}>Federal Reserve Economic Data — real-time macro environment</p>
         </div>
         <button onClick={fetchMacro} className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm transition-all"
@@ -4765,7 +4773,7 @@ const SentimentView = ({ portfolio }) => {
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Sentiment Intelligence</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Sentiment Intelligence</h1>
           <p className="text-sm mt-1" style={{ color: C.textDim }}>NLP-powered news sentiment analysis via VADER</p>
         </div>
       </div>
@@ -4988,7 +4996,7 @@ const PortfolioOptimizerView = ({ portfolio }) => {
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Portfolio Optimizer</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Portfolio Optimizer</h1>
           <p className="text-sm mt-1" style={{ color: C.textDim }}>
             Mean-Variance / Max-Sharpe optimization with Monte Carlo frontier
           </p>
@@ -5218,7 +5226,7 @@ const AlertCenterView = ({ portfolio, watchlist }) => {
     <div className="space-y-6 fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-3xl" style={{ color: C.text }}>Alert Center</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl" style={{ color: C.text }}>Alert Center</h1>
           <p className="text-sm mt-1" style={{ color: C.textDim }}>
             Real-time anomaly detection across {allSymbols.length} symbols
           </p>
@@ -5433,7 +5441,7 @@ export default function App() {
     <>
       <style>{THEME_CSS}</style>
       {sidebarOpen && <div className="overlay open" onClick={() => setSidebarOpen(false)} />}
-      <div className="flex h-screen overflow-hidden" style={{ background: C.ink }}>
+      <div className="flex h-screen" style={{ background: C.ink, overflow: 'hidden' }}>
         <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
           <Sidebar active={view} setActive={setView}
             apiStatus={apiStatus} lastUpdated={lastUpdated} errorMsg={errorMsg} />
