@@ -1408,8 +1408,8 @@ async def brain_portfolio_optimize(req: _PortfolioOptReq):
     _require_brain()
     if len(req.symbols) < 2:
         raise HTTPException(422, "Provide at least 2 symbols")
-    if len(req.symbols) > 20:
-        raise HTTPException(422, "Maximum 20 symbols per optimization request")
+    if len(req.symbols) > 30:
+        raise HTTPException(422, "Maximum 30 symbols per optimization request")
     try:
         return await _yf_fetch(
             lambda: _brain_optimize(req.symbols, req.current_weights, req.risk_free_rate),

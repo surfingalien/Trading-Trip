@@ -4956,7 +4956,7 @@ const PortfolioOptimizerView = ({ portfolio }) => {
   const runOptimize = async () => {
     if (!portfolio?.positions?.length) return;
     setLoading(true); setWarmingUp(false); setError(null); setResult(null); setCorr(null);
-    const syms = portfolio.positions.map(p => p.symbol);
+    const syms = portfolio.positions.slice(0, 25).map(p => p.symbol);
     const currentWeights = {};
     portfolio.positions.forEach(p => {
       currentWeights[p.symbol] = p.value / (portfolio.value || 1);
